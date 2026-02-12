@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>MD Labs — AI 과실비율 분석 v7.0</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib){window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'}</script>
+<style>
+:root{--bg:#050810;--card:rgba(12,17,30,.82);--b1:rgba(148,163,184,.08);--b2:rgba(148,163,184,.18);--t1:#f1f5f9;--t2:#94a3b8;--t3:#64748b;--blue:#3b82f6;--indigo:#6366f1;--violet:#8b5cf6;--emerald:#10b981;--amber:#f59e0b;--red:#ef4444;--cyan:#06b6d4;--sans:'Noto Sans KR',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}html,body,#root{min-height:100vh;overflow-x:hidden}
+body{background:var(--bg);color:var(--t1);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+::selection{background:rgba(99,102,241,.35)}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(148,163,184,.18);border-radius:3px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+textarea,input,button,select{font-family:var(--sans)}
+.drop-active{border-color:var(--blue)!important;background:rgba(59,130,246,.08)!important}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useEffect,useRef,useCallback,useMemo}=React;
+
+/* ╔══════════════════════════════════════════════════════════════╗
+   ║  LAYER 0 — SECURITY                                        ║
+   ║  입력 검증 · XSS 방지 · 데이터 무결성                       ║
+   ╚══════════════════════════════════════════════════════════════╝ */
+const SEC={
+  sanitize(str){
+    if(typeof str!=='string')return'';
+    return str.replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c]||c);
+  },
+  validateText(str,maxLen=10000){
+    if(typeof str!=='string')return'';
+    return str.slice(0,maxLen).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'');
+  },
+  validateFile(file,maxMB=50){
+    if(!file)return{ok:false,reason:'파일 없음'};
+    const mb=file.size/1024/1024;
+    if(mb>maxMB)return{ok:false,reason:`${maxMB}MB 초과`};
+    const ext=(file.name||'').split('.').pop().toLowerCase();
+    const allowed=['pdf','jpg','jpeg','png','gif','webp','bmp','mp4','mov','avi','webm','txt'];
+    if(!allowed.includes(ext)&&!file.type?.match(/^(image|video|application\/pdf|text)\//))
+      return{ok:false,reason:'지원하지 않는 파일 형식'};
+    return{ok:true};
+  },
+  safeJSON(key,fallback=[]){
+    try{const d=localStorage.getItem(key);return d?JSON.parse(d):fallback}catch{return fallback}
+  },
+  safeStore(key,data,maxItems=200){
+    try{const d=Array.isArray(data)?data.slice(0,maxItems):data;localStorage.setItem(key,JSON.stringify(d))}catch(e){console.warn('Storage failed:',e)}
+  }
+};
+
+/* ╔══════════════════════════════════════════════════════════════╗
+   ║  LAYER 1 — DATA (코드와 완전 분리된 데이터)                  ║
+   ║  도표 DB · 법규 DB · 수정요소 DB                             ║
+   ╚══════════════════════════════════════════════════════════════╝ */
+
+/* ── 1-A. 수정요소 마스터 DB (18개) ── */
+const MODS_DB=[
+  {id:"M01",name:"야간",keywords:["야간","밤","어두","새벽","심야","한밤"],adj:5,desc:"야간 운전으로 시야 제한"},
+  {id:"M02",name:"어린이·노약자",keywords:["어린이","아이","노약자","노인","장애인","유아","초등","어르신"],adj:-10,desc:"교통약자 보호의무 가중"},
+  {id:"M03",name:"과속",keywords:["과속","제한속도 초과","속도위반","고속"],adj:10,desc:"제한속도 초과 운행"},
+  {id:"M04",name:"음주",keywords:["음주","술","만취","혈중알콜","음주운전"],adj:15,desc:"음주상태 운전 (중과실)"},
+  {id:"M05",name:"방향지시등 미사용",keywords:["깜빡이","깜박이","방향지시","신호 없이","지시등"],adj:5,desc:"차로변경시 방향지시등 미점등"},
+  {id:"M06",name:"급제동",keywords:["급정거","급제동","급브레이크","급정지"],adj:10,desc:"합리적 이유 없는 급제동"},
+  {id:"M07",name:"우천",keywords:["우천","비","빗길","폭우","미끄러","노면 젖"],adj:3,desc:"우천시 시야·제동거리 불리"},
+  {id:"M08",name:"끼어들기",keywords:["끼어들기","끼어들","무리한 진입"],adj:5,desc:"무리한 끼어들기"},
+  {id:"M09",name:"역주행",keywords:["역주행","반대방향","역방향"],adj:20,desc:"역주행 (중과실)"},
+  {id:"M10",name:"무면허",keywords:["무면허","면허취소","면허정지"],adj:15,desc:"무면허 운전 (중과실)"},
+  {id:"M11",name:"신호위반",keywords:["신호위반","적색진입","빨간불"],adj:20,desc:"교통신호 위반 (중과실)"},
+  {id:"M12",name:"안전거리 미확보",keywords:["안전거리","바짝","밀착","차간거리"],adj:5,desc:"안전거리 미확보"},
+  {id:"M13",name:"중앙선 침범",keywords:["중앙선","중앙선침범","중앙선 넘"],adj:20,desc:"중앙선 침범 (중과실)"},
+  {id:"M14",name:"보행자 보호의무 위반",keywords:["횡단보도 미정지","보행자 무시","보행자 보호"],adj:10,desc:"보행자 보호의무 위반"},
+  {id:"M15",name:"안전벨트 미착용",keywords:["안전벨트","벨트 미착용","시트벨트"],adj:3,desc:"안전벨트 미착용"},
+  {id:"M16",name:"한눈팔기",keywords:["한눈","전방주시","핸드폰","스마트폰","DMB","휴대폰"],adj:10,desc:"전방주시의무 위반"},
+  {id:"M17",name:"적재물 과적",keywords:["과적","적재","과다적재","적재량"],adj:5,desc:"적재물 과적"},
+  {id:"M18",name:"도로공사·장애물",keywords:["공사","장애물","도로공사","낙하물"],adj:-5,desc:"도로 환경요인 참작"}
+];
+
+/* ── 1-B. 법규 마스터 DB ── */
+const LAWS_DB=[
+  {id:"L01",article:"도로교통법 제5조",desc:"신호·지시 준수 의무",triggers:["신호","적색","녹색","황색","교차로"]},
+  {id:"L02",article:"도로교통법 제13조 제3항",desc:"중앙선 우측 통행 의무",triggers:["중앙선","침범","역주행"]},
+  {id:"L03",article:"도로교통법 제17조",desc:"제한속도 준수",triggers:["과속","속도"]},
+  {id:"L04",article:"도로교통법 제19조 제1항",desc:"안전거리 확보 의무",triggers:["추돌","안전거리","후행"]},
+  {id:"L05",article:"도로교통법 제19조 제3항",desc:"차로변경시 통행 방해 금지",triggers:["차선변경","차로변경","끼어들기"]},
+  {id:"L06",article:"도로교통법 제21조",desc:"앞지르기 방법·금지",triggers:["앞지르기","추월"]},
+  {id:"L07",article:"도로교통법 제25조",desc:"교차로 통행방법 (좌·우회전)",triggers:["좌회전","우회전","교차로","비보호"]},
+  {id:"L08",article:"도로교통법 제25조 제2항",desc:"우회전시 서행 및 보행자 보호",triggers:["우회전","보행자"]},
+  {id:"L09",article:"도로교통법 제26조",desc:"교통정리 없는 교차로",triggers:["무신호","비신호","교차로","우선"]},
+  {id:"L10",article:"도로교통법 제27조",desc:"횡단보도 보행자 보호 의무",triggers:["횡단보도","보행자","횡단"]},
+  {id:"L11",article:"도로교통법 제44조",desc:"음주운전 금지",triggers:["음주","술"]},
+  {id:"L12",article:"도로교통법 제48조",desc:"안전운전 의무",triggers:["안전운전"]},
+  {id:"L13",article:"도로교통법 제49조 제1항 제8호",desc:"문열기 안전확인 의무",triggers:["문열기","도어링","문"]},
+  {id:"L14",article:"민법 제750조",desc:"불법행위 손해배상 책임",triggers:[]},
+  {id:"L15",article:"자동차손해배상보장법 제3조",desc:"운행자 책임",triggers:[]},
+  {id:"L16",article:"교통사고처리특례법 제3조",desc:"처벌 특례 (12대 중과실)",triggers:["중앙선","신호위반","음주","무면허"]},
+  {id:"L17",article:"도로교통법 제60조",desc:"고속도로 최저속도·갓길 진입 금지",triggers:["고속도로"]},
+  {id:"L18",article:"도로교통법 제63조",desc:"고속도로 합류·진출 방법",triggers:["합류","진입","가속차로"]},
+];
+
+/* ── 1-C. KNIA 과실비율 인정기준 도표 DB ──
+   v6.3 대비 변경: patterns[] 배열로 매칭 규칙을 데이터화
+   → matchDiagram()에서 if문 하드코딩 완전 제거
+   patterns: [{words:[필수키워드], weight:가중치, require:'all'|'any'}]
+*/
+const DB=[
+// ══════ 차대차: 교차로 신호 ══════
+{id:"101",cat:"차대차",sub:"교차로",t:"녹색직진 vs 적색직진",bf:{a:0,b:100},
+  mods:[{n:"과속",v:5,tg:"a"},{n:"현저한 과실",v:5,tg:"a"},{n:"중대한 과실",v:10,tg:"a"}],
+  kw:["녹색","직진","적색","교차로","신호"],la:"녹색직진",lb:"적색직진",
+  patterns:[{w:["녹색","직진","적색","직진"],wt:40,req:"all"},{w:["신호위반","직진"],wt:20,req:"all"}]},
+{id:"102",cat:"차대차",sub:"교차로",t:"녹색직진 vs 적색좌회전",bf:{a:0,b:100},mods:[],
+  kw:["녹색","직진","적색","좌회전","교차로"],la:"녹색직진",lb:"적색좌회전",
+  patterns:[{w:["녹색","직진","적색","좌회전"],wt:40,req:"all"}]},
+{id:"103",cat:"차대차",sub:"교차로",t:"녹색직진 vs 황색직진",bf:{a:20,b:80},
+  mods:[{n:"과속",v:5,tg:"a"}],kw:["녹색","직진","황색","교차로"],la:"녹색직진",lb:"황색직진",
+  patterns:[{w:["녹색","직진","황색"],wt:35,req:"all"}]},
+{id:"104",cat:"차대차",sub:"교차로",t:"황색직진 vs 적색직진",bf:{a:30,b:70},mods:[],
+  kw:["황색","적색","직진","교차로"],la:"황색직진",lb:"적색직진",
+  patterns:[{w:["황색","적색","직진"],wt:35,req:"all"}]},
+{id:"105",cat:"차대차",sub:"교차로",t:"양쪽 적색 직진",bf:{a:50,b:50},
+  mods:[{n:"선진입",v:-10}],kw:["적색","직진","양쪽","교차로","쌍방"],la:"A차",lb:"B차",
+  patterns:[{w:["적색","양쪽"],wt:30,req:"all"},{w:["쌍방","적색"],wt:25,req:"all"},{w:["양쪽","신호위반"],wt:25,req:"all"}]},
+{id:"106",cat:"차대차",sub:"교차로",t:"직진 vs 비보호좌회전",bf:{a:20,b:80},
+  mods:[{n:"좌회전완료직전",v:10,tg:"a"},{n:"과속",v:5,tg:"a"}],
+  kw:["녹색","직진","비보호","좌회전","교차로"],la:"직진차",lb:"좌회전차",
+  patterns:[{w:["비보호","좌회전"],wt:40,req:"all"},{w:["직진","비보호좌회전"],wt:35,req:"all"},{w:["비보호","좌회전","직진"],wt:45,req:"all"}]},
+{id:"107",cat:"차대차",sub:"교차로",t:"좌회전신호좌회전 vs 적색직진",bf:{a:0,b:100},mods:[],
+  kw:["좌회전","신호","적색","직진","교차로"],la:"좌회전차",lb:"적색직진",
+  patterns:[{w:["좌회전신호","적색","직진"],wt:35,req:"all"},{w:["좌회전","신호","적색"],wt:30,req:"all"}]},
+{id:"108",cat:"차대차",sub:"교차로",t:"녹색우회전 vs 횡방향직진",bf:{a:80,b:20},mods:[],
+  kw:["우회전","녹색","횡방향","직진","교차로"],la:"우회전차",lb:"직진차",
+  patterns:[{w:["녹색","우회전","횡방향"],wt:30,req:"all"},{w:["우회전","직진","교차로"],wt:15,req:"all"}]},
+{id:"109",cat:"차대차",sub:"교차로",t:"적색우회전 vs 녹색직진",bf:{a:90,b:10},mods:[],
+  kw:["적색","우회전","녹색","직진","교차로"],la:"적색우회전",lb:"녹색직진",
+  patterns:[{w:["적색","우회전"],wt:40,req:"all"},{w:["적색우회전"],wt:35,req:"all"},{w:["우회전","적색","녹색","직진"],wt:40,req:"all"}]},
+
+// ══════ 차대차: 무신호 교차로 ══════
+{id:"201",cat:"차대차",sub:"교차로",t:"같은폭 교차로 우측차 우선",bf:{a:40,b:60},
+  mods:[{n:"과속",v:5}],kw:["무신호","교차로","같은","동일","우측","좌측"],la:"좌측차",lb:"우측차",
+  patterns:[{w:["무신호","교차로","같은"],wt:25,req:"all"},{w:["무신호","우측","우선"],wt:30,req:"all"},{w:["동일","폭","교차로"],wt:20,req:"all"}]},
+{id:"202",cat:"차대차",sub:"교차로",t:"넓은도로 vs 좁은도로",bf:{a:30,b:70},
+  mods:[{n:"과속",v:5,tg:"a"}],kw:["무신호","교차로","넓은","좁은","광로","협로"],la:"넓은도로",lb:"좁은도로",
+  patterns:[{w:["넓은","좁은","교차로"],wt:30,req:"all"},{w:["광로","협로"],wt:30,req:"all"},{w:["무신호","큰길","좁은길"],wt:25,req:"all"}]},
+{id:"203",cat:"차대차",sub:"교차로",t:"무신호 직진 vs 좌회전",bf:{a:30,b:70},
+  mods:[{n:"과속",v:10,tg:"a"}],kw:["무신호","교차로","직진","좌회전"],la:"직진차",lb:"좌회전차",
+  patterns:[{w:["무신호","직진","좌회전"],wt:35,req:"all"},{w:["비신호","교차로","좌회전"],wt:25,req:"all"}]},
+{id:"204",cat:"차대차",sub:"교차로",t:"무신호 직진 vs 우회전",bf:{a:20,b:80},mods:[],
+  kw:["무신호","교차로","직진","우회전"],la:"직진차",lb:"우회전차",
+  patterns:[{w:["무신호","직진","우회전"],wt:35,req:"all"}]},
+{id:"205",cat:"차대차",sub:"교차로",t:"무신호 T자로 직진 vs 진입",bf:{a:30,b:70},mods:[],
+  kw:["무신호","T자","직진","진입"],la:"직진차",lb:"진입차",
+  patterns:[{w:["T자","진입"],wt:30,req:"all"},{w:["T자로","직진"],wt:25,req:"all"},{w:["삼거리","진입","직진"],wt:20,req:"all"}]},
+{id:"206",cat:"차대차",sub:"교차로",t:"일시정지 표지 무시 진입",bf:{a:10,b:90},mods:[],
+  kw:["일시정지","정지","표지","무시","진입","교차로"],la:"직진차",lb:"정지위반차",
+  patterns:[{w:["일시정지","무시"],wt:40,req:"all"},{w:["정지표지","위반"],wt:35,req:"all"},{w:["일시정지","진입"],wt:30,req:"all"}]},
+
+// ══════ 차대차: 대향(마주보는) ══════
+{id:"301",cat:"차대차",sub:"대향",t:"중앙선 침범",bf:{a:0,b:100},
+  mods:[{n:"야간미등",v:5,tg:"a"},{n:"현저한 과실",v:5,tg:"a"}],
+  kw:["중앙선","침범","역주행","대향","마주"],la:"피해차",lb:"침범차",
+  patterns:[{w:["중앙선","침범"],wt:45,req:"all"},{w:["중앙선침범"],wt:45,req:"all"},{w:["역주행","정면"],wt:35,req:"all"},{w:["중앙선","넘"],wt:35,req:"all"}]},
+{id:"302",cat:"차대차",sub:"대향",t:"좌회전 vs 직진(대향)",bf:{a:80,b:20},
+  mods:[{n:"좌회전완료직전",v:-10,tg:"a"},{n:"과속",v:10,tg:"b"}],
+  kw:["좌회전","직진","대향","마주"],la:"좌회전차",lb:"직진차",
+  patterns:[{w:["좌회전","직진","대향"],wt:30,req:"all"},{w:["좌회전","마주오는","직진"],wt:30,req:"all"},{w:["대향","좌회전"],wt:20,req:"all"}]},
+{id:"303",cat:"차대차",sub:"대향",t:"유턴 vs 직진",bf:{a:80,b:20},
+  mods:[{n:"과속",v:5,tg:"b"}],kw:["유턴","U턴","직진","대향"],la:"유턴차",lb:"직진차",
+  patterns:[{w:["유턴"],wt:40,req:"any"},{w:["u턴"],wt:40,req:"any"},{w:["유턴","직진"],wt:45,req:"all"}]},
+
+// ══════ 차대차: 동행(추돌·차선변경) ══════
+{id:"401",cat:"차대차",sub:"동행",t:"후행차 추돌 (기본)",bf:{a:0,b:100},
+  mods:[{n:"급제동",v:20,tg:"a"},{n:"급정거",v:20,tg:"a"}],
+  kw:["추돌","후행","앞차","뒷차","안전거리","동일방향"],la:"선행차",lb:"후행차",
+  patterns:[{w:["추돌","뒷차"],wt:30,req:"all"},{w:["추돌","후행"],wt:30,req:"all"},{w:["뒤에서","추돌"],wt:25,req:"all"},{w:["앞차","추돌"],wt:25,req:"all"},{w:["안전거리","추돌"],wt:30,req:"all"}]},
+{id:"402",cat:"차대차",sub:"동행",t:"선행차 급정거 후 추돌",bf:{a:20,b:80},
+  mods:[{n:"도로위험물",v:-10,tg:"a"}],kw:["급정거","급제동","추돌","정지"],la:"급정거차",lb:"후행차",
+  patterns:[{w:["급정거","추돌"],wt:40,req:"all"},{w:["급제동","추돌"],wt:40,req:"all"},{w:["갑자기","멈","추돌"],wt:30,req:"all"},{w:["급브레이크","추돌"],wt:35,req:"all"}]},
+{id:"403",cat:"차대차",sub:"동행",t:"적법주정차 차량 추돌",bf:{a:0,b:100},
+  mods:[{n:"야간미등",v:10,tg:"a"},{n:"고장정차",v:10,tg:"a"}],
+  kw:["주정차","정차","주차","추돌","정지"],la:"주정차차",lb:"추돌차",
+  patterns:[{w:["주정차","추돌"],wt:35,req:"all"},{w:["정차","추돌"],wt:25,req:"all"},{w:["세워둔","차","추돌"],wt:25,req:"all"}]},
+{id:"404",cat:"차대차",sub:"동행",t:"불법주정차 차량 추돌",bf:{a:10,b:90},
+  mods:[{n:"야간미등",v:10,tg:"a"}],kw:["불법","주정차","추돌"],la:"불법주정차",lb:"추돌차",
+  patterns:[{w:["불법","주정차","추돌"],wt:45,req:"all"},{w:["불법주정차"],wt:40,req:"all"},{w:["불법","정차","추돌"],wt:35,req:"all"}]},
+{id:"405",cat:"차대차",sub:"동행",t:"차선변경 vs 직진(후방충돌)",bf:{a:70,b:30},
+  mods:[{n:"방향지시등 미사용",v:10,tg:"a"},{n:"끼어들기",v:5,tg:"a"}],
+  kw:["차선변경","직진","후방","끼어들기","깜빡이","깜박이"],la:"차선변경",lb:"직진차",
+  patterns:[{w:["차선변경","후방"],wt:35,req:"all"},{w:["차선변경","뒤"],wt:25,req:"all"},{w:["차선변경","직진","충돌"],wt:30,req:"all"}]},
+{id:"406",cat:"차대차",sub:"동행",t:"차선변경 vs 직진(측면충돌)",bf:{a:80,b:20},
+  mods:[{n:"방향지시등 미사용",v:10,tg:"a"}],kw:["차선변경","직진","측면","측방","옆"],la:"차선변경",lb:"직진차",
+  patterns:[{w:["차선변경","측면"],wt:40,req:"all"},{w:["차선변경","옆"],wt:30,req:"all"},{w:["차로변경","측면"],wt:35,req:"all"},{w:["차선변경","직진","측"],wt:35,req:"all"}]},
+{id:"407",cat:"차대차",sub:"동행",t:"동시 차선변경 충돌",bf:{a:50,b:50},
+  mods:[{n:"방향지시등 미사용",v:10}],kw:["동시","차선변경","쌍방"],la:"A차",lb:"B차",
+  patterns:[{w:["동시","차선변경"],wt:40,req:"all"},{w:["쌍방","차선변경"],wt:35,req:"all"},{w:["양쪽","차선변경"],wt:30,req:"all"}]},
+{id:"408",cat:"차대차",sub:"동행",t:"진로변경(끼어들기) 직후 추돌",bf:{a:70,b:30},
+  mods:[{n:"급제동",v:10,tg:"a"}],kw:["끼어들기","진로변경","직후","추돌"],la:"끼어들기차",lb:"후행차",
+  patterns:[{w:["끼어들기","추돌"],wt:40,req:"all"},{w:["끼어들","직후"],wt:35,req:"all"},{w:["진로변경","추돌"],wt:30,req:"all"}]},
+
+// ══════ 차대차: 합류 ══════
+{id:"501",cat:"차대차",sub:"합류",t:"도로 진입 vs 직진",bf:{a:80,b:20},
+  mods:[{n:"야간",v:5,tg:"b"}],kw:["진입","합류","직진","본선"],la:"진입차",lb:"직진차",
+  patterns:[{w:["진입","직진","합류"],wt:30,req:"all"},{w:["합류","본선"],wt:25,req:"all"}]},
+{id:"502",cat:"차대차",sub:"합류",t:"고속도로 합류 vs 본선",bf:{a:70,b:30},
+  mods:[{n:"가속차로부족",v:-10,tg:"a"}],kw:["고속도로","합류","본선","가속차로"],la:"합류차",lb:"본선차",
+  patterns:[{w:["고속도로","합류"],wt:40,req:"all"},{w:["가속차로","합류"],wt:35,req:"all"},{w:["고속도로","진입"],wt:25,req:"all"}]},
+
+// ══════ 차대차: 주차장·회전교차로·기타 ══════
+{id:"601",cat:"차대차",sub:"기타",t:"주차장 통로 직진 vs 출차(후진)",bf:{a:30,b:70},mods:[],
+  kw:["주차장","직진","출차","후진","통로"],la:"직진차",lb:"출차차",
+  patterns:[{w:["주차장","출차"],wt:40,req:"all"},{w:["주차장","후진","직진"],wt:35,req:"all"},{w:["주차장","통로","출차"],wt:40,req:"all"}]},
+{id:"602",cat:"차대차",sub:"기타",t:"주차장 통로 내 교행",bf:{a:50,b:50},
+  mods:[{n:"역주행",v:20}],kw:["주차장","통로","교행","교차"],la:"A차",lb:"B차",
+  patterns:[{w:["주차장","교행"],wt:35,req:"all"},{w:["주차장","통로","충돌"],wt:25,req:"all"}]},
+{id:"603",cat:"차대차",sub:"기타",t:"회전교차로 회전 vs 진입",bf:{a:20,b:80},mods:[],
+  kw:["회전교차로","로터리","회전","진입"],la:"회전차",lb:"진입차",
+  patterns:[{w:["회전교차로","진입"],wt:40,req:"all"},{w:["로터리","진입"],wt:40,req:"all"},{w:["회전교차로"],wt:20,req:"any"}]},
+{id:"604",cat:"차대차",sub:"기타",t:"회전교차로 진출 vs 회전",bf:{a:60,b:40},mods:[],
+  kw:["회전교차로","진출","회전"],la:"진출차",lb:"회전차",
+  patterns:[{w:["회전교차로","진출"],wt:40,req:"all"},{w:["로터리","나오"],wt:30,req:"all"}]},
+{id:"605",cat:"차대차",sub:"기타",t:"후진 vs 후진",bf:{a:50,b:50},mods:[],
+  kw:["후진","쌍방","동시"],la:"A후진",lb:"B후진",
+  patterns:[{w:["후진","후진"],wt:35,req:"all"},{w:["쌍방","후진"],wt:35,req:"all"},{w:["동시","후진"],wt:35,req:"all"}]},
+{id:"606",cat:"차대차",sub:"기타",t:"후진 vs 직진",bf:{a:80,b:20},mods:[],
+  kw:["후진","직진"],la:"후진차",lb:"직진차",
+  patterns:[{w:["후진","직진","충돌"],wt:30,req:"all"},{w:["후진","직진차"],wt:25,req:"all"}]},
+{id:"607",cat:"차대차",sub:"기타",t:"위법차선변경 vs 오토바이",bf:{a:60,b:40},
+  mods:[{n:"과속",v:10,tg:"b"}],kw:["이륜","오토바이","차선변경","바이크"],la:"차선변경차",lb:"이륜차",
+  patterns:[{w:["오토바이","차선변경"],wt:35,req:"all"},{w:["이륜","차선변경"],wt:35,req:"all"},{w:["바이크","차선변경"],wt:30,req:"all"}]},
+{id:"608",cat:"차대차",sub:"기타",t:"문열기(도어링) 사고",bf:{a:80,b:20},mods:[],
+  kw:["문열기","도어","문","열기","도어링","이륜"],la:"문열기차",lb:"통과차",
+  patterns:[{w:["문열기"],wt:45,req:"any"},{w:["도어링"],wt:45,req:"any"},{w:["문","열","충돌"],wt:30,req:"all"},{w:["차문","열"],wt:30,req:"all"}]},
+{id:"609",cat:"차대차",sub:"기타",t:"고속도로 본선 정지차 추돌",bf:{a:30,b:70},
+  mods:[{n:"야간",v:-10,tg:"a"},{n:"삼각대미설치",v:10,tg:"a"}],
+  kw:["고속도로","정지","추돌","본선"],la:"정지차",lb:"추돌차",
+  patterns:[{w:["고속도로","정지","추돌"],wt:40,req:"all"},{w:["고속도로","서있","추돌"],wt:30,req:"all"}]},
+
+// ══════ 차대사람 ══════
+{id:"보1",cat:"차대사람",sub:"횡단보도",t:"차녹색직진 vs 보행자적색횡단",bf:{p:70},
+  mods:[{n:"야간",v:-5},{n:"어린이·노약자",v:-15}],
+  kw:["녹색","직진","적색","횡단","횡단보도","보행자","신호"],
+  patterns:[{w:["보행자","적색","횡단"],wt:35,req:"all"},{w:["보행자","빨간불","횡단"],wt:30,req:"all"}]},
+{id:"보2",cat:"차대사람",sub:"횡단보도",t:"차적색 vs 보행자녹색",bf:{p:0},mods:[],
+  kw:["적색","녹색","횡단보도","보행자"],
+  patterns:[{w:["보행자","녹색","횡단"],wt:30,req:"all"},{w:["적색","보행자","횡단보도"],wt:35,req:"all"}]},
+{id:"보3",cat:"차대사람",sub:"횡단보도",t:"무신호 횡단보도 보행자",bf:{p:5},
+  mods:[{n:"야간",v:5},{n:"어린이·노약자",v:-5}],kw:["무신호","횡단보도","보행자","횡단"],
+  patterns:[{w:["무신호","횡단보도","보행자"],wt:35,req:"all"},{w:["신호없는","횡단보도"],wt:25,req:"all"}]},
+{id:"보4",cat:"차대사람",sub:"횡단보도",t:"우회전 vs 횡단보도 보행자(녹색)",bf:{p:0},mods:[],
+  kw:["우회전","보행자","녹색","횡단보도"],
+  patterns:[{w:["우회전","보행자","횡단"],wt:40,req:"all"},{w:["우회전","횡단보도","보행자"],wt:45,req:"all"}]},
+{id:"보5",cat:"차대사람",sub:"횡단보도",t:"좌회전 vs 횡단보도 보행자",bf:{p:0},
+  mods:[{n:"녹색점멸",v:10}],kw:["좌회전","보행자","횡단보도"],
+  patterns:[{w:["좌회전","보행자","횡단"],wt:35,req:"all"},{w:["좌회전","횡단보도"],wt:30,req:"all"}]},
+{id:"보6",cat:"차대사람",sub:"기타",t:"횡단보도 밖 횡단",bf:{p:20},
+  mods:[{n:"야간",v:5},{n:"어린이·노약자",v:-5}],kw:["횡단보도","밖","외","보행자","무단횡단"],
+  patterns:[{w:["횡단보도","밖","횡단"],wt:30,req:"all"},{w:["횡단보도","외","보행자"],wt:25,req:"all"}]},
+{id:"보7",cat:"차대사람",sub:"기타",t:"차도 무단횡단(보행자)",bf:{p:30},
+  mods:[{n:"어린이·노약자",v:-10},{n:"야간",v:5}],kw:["무단횡단","차도","보행자"],
+  patterns:[{w:["무단횡단"],wt:45,req:"any"},{w:["무단","횡단","보행자"],wt:35,req:"all"}]},
+{id:"보8",cat:"차대사람",sub:"기타",t:"보도 침범",bf:{p:0},mods:[],
+  kw:["보도","인도","침범","보행자"],
+  patterns:[{w:["보도","침범"],wt:45,req:"all"},{w:["인도","침범"],wt:45,req:"all"},{w:["인도","올라"],wt:30,req:"all"}]},
+{id:"보9",cat:"차대사람",sub:"기타",t:"후진 vs 보행자",bf:{p:10},
+  mods:[{n:"어린이·노약자",v:-5}],kw:["후진","보행자"],
+  patterns:[{w:["후진","보행자"],wt:40,req:"all"},{w:["후진","사람"],wt:30,req:"all"}]},
+
+// ══════ 차대자전거 ══════
+{id:"거1",cat:"차대자전거",sub:"교차로",t:"직진차 vs 자전거 횡단",bf:{a:60,b:40},
+  mods:[{n:"자전거역주행",v:10,tg:"b"}],kw:["자전거","횡단","직진"],la:"자동차",lb:"자전거",
+  patterns:[{w:["자전거","횡단","직진"],wt:30,req:"all"}]},
+{id:"거2",cat:"차대자전거",sub:"동행",t:"추돌 자전거",bf:{a:90,b:10},
+  mods:[{n:"야간",v:-5,tg:"a"}],kw:["자전거","추돌"],la:"자동차",lb:"자전거",
+  patterns:[{w:["자전거","추돌"],wt:35,req:"all"}]},
+{id:"거3",cat:"차대자전거",sub:"동행",t:"차선변경 vs 자전거",bf:{a:80,b:20},mods:[],
+  kw:["자전거","차선변경"],la:"자동차",lb:"자전거",
+  patterns:[{w:["자전거","차선변경"],wt:35,req:"all"}]},
+{id:"거4",cat:"차대자전거",sub:"기타",t:"문열기 vs 자전거",bf:{a:90,b:10},mods:[],
+  kw:["자전거","문열기","도어","도어링"],la:"자동차",lb:"자전거",
+  patterns:[{w:["자전거","문열기"],wt:40,req:"all"},{w:["자전거","도어링"],wt:40,req:"all"},{w:["자전거","문","열"],wt:30,req:"all"}]},
+];
+
+/* ╔══════════════════════════════════════════════════════════════╗
+   ║  LAYER 2 — ENGINE (데이터 기반 분석 엔진)                    ║
+   ║  매칭 · 수정요소 감지 · 과실비율 산정 · 법규 추출            ║
+   ╚══════════════════════════════════════════════════════════════╝ */
+
+/* ── 2-A. 도표 매칭 (패턴 기반 — if문 없음) ── */
+function matchDiagram(text){
+  const t=(text||'').replace(/\s+/g,' ').toLowerCase();
+  if(t.length<5)return null;
+
+  const scored=DB.map(d=>{
+    let s=0;
+    // (a) 기본 키워드 매칭
+    d.kw.forEach(k=>{if(t.includes(k))s+=8});
+    // (b) 카테고리 보너스
+    if((t.includes('보행자')||t.includes('사람'))&&d.cat==='차대사람')s+=20;
+    if((t.includes('자전거')||t.includes('이륜'))&&d.cat==='차대자전거')s+=20;
+    // (c) 패턴 매칭 (데이터 드리븐 — 핵심!)
+    (d.patterns||[]).forEach(p=>{
+      if(p.req==='all'){
+        if(p.w.every(w=>t.includes(w)))s+=p.wt;
+      }else{
+        if(p.w.some(w=>t.includes(w)))s+=p.wt;
+      }
+    });
+    // (d) 서브카테고리 키워드 약한 보너스
+    if(t.includes('교차로')&&d.sub==='교차로')s+=5;
+    if(t.includes('고속도로')&&d.kw.includes('고속도로'))s+=8;
+    if(t.includes('주차장')&&d.kw.includes('주차장'))s+=8;
+    return{d,score:s};
+  });
+
+  scored.sort((a,b)=>b.score-a.score);
+  if(scored[0].score<15)return null;
+  const top=scored[0];
+  return{
+    match:top.d,
+    confidence:top.score>=50?"상":top.score>=30?"중":"하",
+    matchScore:top.score,
+    alts:scored.slice(1,4).filter(x=>x.score>=15).map(x=>({id:x.d.id,t:x.d.t,score:x.score}))
+  };
+}
+
+/* ── 2-B. 수정요소 감지 (데이터 드리븐) ── */
+function detectMods(text){
+  const t=(text||'').toLowerCase();
+  return MODS_DB.filter(m=>m.keywords.some(k=>t.includes(k))).map(m=>m.name);
+}
+
+/* ── 2-C. 과실비율 산정 ── */
+function calcFault(d,mods){
+  let fA,fB;const isPed=d.bf.p!==undefined;
+  if(isPed){fA=100-d.bf.p;fB=d.bf.p}else{fA=d.bf.a;fB=d.bf.b}
+  (d.mods||[]).forEach(m=>{
+    if(mods.some(am=>m.n.includes(am)||am.includes(m.n))){
+      if(m.tg==='a')fA+=m.v;else if(m.tg==='b')fB+=m.v;else{if(isPed)fB+=m.v;else fA+=m.v}
+    }
+  });
+  fA=Math.max(0,Math.min(100,fA));fB=Math.max(0,Math.min(100,fB));
+  const t=fA+fB;if(t>0&&t!==100){fA=Math.round(fA/t*100);fB=100-fA}
+  return{fA,fB};
+}
+
+/* ── 2-D. 관련 법규 추출 (DB 기반) ── */
+function getLaws(d,text){
+  const t=(text||'').toLowerCase();
+  const matched=LAWS_DB.filter(l=>
+    l.triggers.length===0||(l.triggers.some(tr=>t.includes(tr)))
+  );
+  // 카테고리별 필수 법규
+  const result=[...matched];
+  if(d.cat==='차대사람'&&!result.find(l=>l.id==='L10'))
+    result.unshift(LAWS_DB.find(l=>l.id==='L10'));
+  // 민법 750조 항상 포함
+  if(!result.find(l=>l.id==='L14'))result.push(LAWS_DB.find(l=>l.id==='L14'));
+  // 중복 제거 + 최대 8개
+  const unique=[...new Map(result.filter(Boolean).map(l=>[l.id,l])).values()];
+  return unique.slice(0,8).map(l=>({a:l.article,d:l.desc}));
+}
+
+/* ── 2-E. AI 감정서 분석 텍스트 생성 ── */
+function generateAnalysis(r,input){
+  const d=r.diagram;const isPed=d.cat==='차대사람';const isBike=d.cat==='차대자전거';
+  const lines=[];
+
+  // 사고 유형 분석
+  lines.push(`본 건은 ${d.cat} 사고 중 "${d.sub}" 유형에 해당하며, 손해보험협회 과실비율 인정기준 도표 ${d.id}(${d.t})이 적용됩니다.`);
+
+  // 과실 근거
+  if(isPed){
+    lines.push(`기본 과실비율은 차량측 ${100-d.bf.p}% : 보행자 ${d.bf.p}%입니다.`);
+    if(d.bf.p===0)lines.push(`보행자가 정당한 통행권을 가진 상황으로, 차량측에 전적인 과실이 인정됩니다.`);
+    else lines.push(`보행자에게도 ${d.bf.p}%의 기본 과실이 인정되는 것은 보행자의 안전주의 의무에 기인합니다.`);
+  }else if(isBike){
+    lines.push(`기본 과실비율은 자동차 ${d.bf.a}% : 자전거 ${d.bf.b}%입니다.`);
+    lines.push(`자동차는 자전거 대비 교통약자에 해당하는 자전거에 대한 주의의무가 가중됩니다.`);
+  }else{
+    lines.push(`기본 과실비율은 ${r.labelA} ${d.bf.a}% : ${r.labelB} ${d.bf.b}%입니다.`);
+    if(d.bf.b>=90)lines.push(`${r.labelB}측의 과실이 압도적으로 높은 것은 중대한 교통법규 위반에 기인합니다.`);
+    else if(Math.abs(d.bf.a-d.bf.b)<=20)lines.push(`쌍방 과실이 비교적 균형적인 것은 양측 모두 주의의무가 있는 상황입니다.`);
+  }
+
+  // 수정요소 분석
+  if(r.mods?.length>0){
+    lines.push(`수정요소로 ${r.mods.join(', ')}이(가) 감지되었습니다.`);
+    r.mods.forEach(m=>{
+      const mdb=MODS_DB.find(x=>x.name===m);
+      if(mdb)lines.push(`- ${m}: ${mdb.desc} (일반적 조정폭 ${mdb.adj>0?'+':''}${mdb.adj}%)`);
+    });
+    lines.push(`수정요소를 반영한 최종 과실비율은 ${r.labelA} ${r.faultA}% : ${r.labelB} ${r.faultB}%로 산정됩니다.`);
+  }else{
+    lines.push(`별도의 수정요소가 감지되지 않아 기본 과실비율이 최종 비율로 적용됩니다.`);
+  }
+
+  return lines.join('\n');
+}
+
+/* ╔══════════════════════════════════════════════════════════════╗
+   ║  LAYER 3 — UTILITIES (PDF·OCR·영상·KB)                      ║
+   ╚══════════════════════════════════════════════════════════════╝ */
+
+/* ── PDF TEXT EXTRACTION ── */
+async function extractPDFText(file,onStatus,onProgress,maxPages=20){
+  if(!window.pdfjsLib)throw new Error("PDF.js 라이브러리 없음");
+  onStatus?.("PDF 파일 읽는 중...");onProgress?.(5);
+  const buf=await file.arrayBuffer();
+  onStatus?.("PDF 파싱 중...");onProgress?.(10);
+  const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+  const n=Math.min(pdf.numPages,maxPages);
+  onStatus?.(`총 ${pdf.numPages}페이지 감지 (${n}페이지 처리)`);onProgress?.(15);
+  let allText='';
+  for(let i=1;i<=n;i++){
+    onStatus?.(`페이지 ${i}/${n} 텍스트 추출...`);
+    onProgress?.(15+Math.round((i/n)*80));
+    const page=await pdf.getPage(i);
+    const tc=await page.getTextContent();
+    const pt=tc.items.map(it=>it.str).join(' ');
+    if(pt.trim())allText+=`\n[p${i}] ${pt.trim()}`;
+  }
+  onProgress?.(98);
+  return{text:allText.trim(),totalPages:pdf.numPages,extracted:n};
+}
+
+/* ── PDF → Image for OCR fallback ── */
+async function renderPDFToImages(file,onStatus,onProgress,maxPages=5){
+  if(!window.pdfjsLib)throw new Error("PDF.js 없음");
+  const buf=await file.arrayBuffer();
+  const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+  const n=Math.min(pdf.numPages,maxPages);
+  const imgs=[];
+  for(let i=1;i<=n;i++){
+    onStatus?.(`페이지 ${i}/${n} 이미지 렌더링...`);
+    onProgress?.(Math.round((i/n)*90));
+    const page=await pdf.getPage(i);
+    const vp=page.getViewport({scale:2});
+    const cv=document.createElement('canvas');
+    cv.width=vp.width;cv.height=vp.height;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
+    await page.render({canvasContext:ctx,viewport:vp}).promise;
+    imgs.push(cv.toDataURL('image/png'));
+  }
+  return imgs;
+}
+
+/* ── OCR (Tesseract.js v5) ── */
+function loadScript(url,timeout=15000){
+  return new Promise((ok,fail)=>{
+    if(document.querySelector(`script[src="${url}"]`)&&window.Tesseract){ok();return}
+    const s=document.createElement('script');s.src=url;s.async=true;
+    const t=setTimeout(()=>{s.remove();fail(new Error('timeout'))},timeout);
+    s.onload=()=>{clearTimeout(t);setTimeout(ok,400)};s.onerror=()=>{clearTimeout(t);s.remove();fail(new Error('failed'))};
+    document.head.appendChild(s);
+  });
+}
+async function ensureTesseract(){
+  if(window.Tesseract)return true;
+  for(const u of["https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js","https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"]){
+    try{await loadScript(u);if(window.Tesseract)return true}catch(e){}
+  }
+  return false;
+}
+function imgToCanvas(src){
+  return new Promise((ok,fail)=>{
+    const img=new Image();img.crossOrigin='anonymous';
+    img.onload=()=>{const c=document.createElement('canvas');c.width=Math.min(img.width,2000);c.height=Math.round(img.height*(c.width/img.width));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);ok(c.toDataURL('image/png'))};
+    img.onerror=()=>fail(new Error('이미지 로드 실패'));
+    if(typeof src==='string')img.src=src;
+    else{const r=new FileReader();r.onload=e=>{img.src=e.target.result};r.onerror=()=>fail(new Error('파일읽기실패'));r.readAsDataURL(src)}
+  });
+}
+async function runOCR(imgSrc,onStatus,onProgress){
+  onStatus?.("Tesseract.js 로딩...");onProgress?.(5);
+  if(!await ensureTesseract())throw new Error("Tesseract.js 로딩 실패");
+  onStatus?.("이미지 전처리...");onProgress?.(10);
+  const du=await imgToCanvas(imgSrc);
+  onStatus?.("OCR 워커 생성 + 한국어 데이터...");onProgress?.(15);
+  let w;
+  try{
+    w=await window.Tesseract.createWorker("kor+eng",1,{logger:m=>{
+      if(m.status==='loading language traineddata'){onStatus?.(`한국어 데이터 ${Math.round((m.progress||0)*100)}%`);onProgress?.(20+Math.round((m.progress||0)*35))}
+      else if(m.status==='recognizing text'){onStatus?.(`텍스트 인식 ${Math.round((m.progress||0)*100)}%`);onProgress?.(60+Math.round((m.progress||0)*35))}
+    }});
+  }catch(e){
+    try{w=await window.Tesseract.createWorker("eng",1,{})}catch(e2){throw new Error(`OCR엔진 생성 실패`)}
+  }
+  const r=await w.recognize(du);
+  await w.terminate().catch(()=>{});
+  return{text:(r?.data?.text||'').trim(),confidence:Math.round(r?.data?.confidence||0)};
+}
+
+/* ── Video Env ── */
+function grabFrames(v,n,onMsg){return new Promise((ok,fail)=>{
+  const d=v.duration;if(!d||!isFinite(d))return fail(new Error("영상길이 오류"));
+  const cv=document.createElement('canvas'),ctx=cv.getContext('2d'),fr=[],ts=[];
+  for(let i=1;i<=n;i++)ts.push(Math.max(.1,Math.min(d-.05,(d/(n+1))*i)));
+  let idx=0;const sf=setTimeout(()=>ok(fr),12000);
+  function nx(){if(idx>=ts.length){clearTimeout(sf);ok(fr);return}onMsg?.(`프레임 ${idx+1}/${n}`);v.currentTime=ts[idx]}
+  v.onseeked=()=>{try{cv.width=v.videoWidth||640;cv.height=v.videoHeight||360;ctx.drawImage(v,0,0,cv.width,cv.height);fr.push({time:ts[idx],url:cv.toDataURL('image/jpeg',.7)})}catch(e){}idx++;nx()};
+  v.onerror=()=>{clearTimeout(sf);fail(new Error("프레임 오류"))};nx();
+})}
+function analyzeEnv(du){return new Promise(ok=>{
+  const img=new Image();img.onload=()=>{try{
+    const cv=document.createElement('canvas'),ctx=cv.getContext('2d'),sw=Math.min(img.width,480),sh=Math.round(img.height*(sw/img.width));
+    cv.width=sw;cv.height=sh;ctx.drawImage(img,0,0,sw,sh);const px=ctx.getImageData(0,0,sw,sh).data;
+    let tb=0,dk=0,rp=0,gp=0,yp=0,rpAll=0,gpAll=0,ypAll=0,n=0;
+    for(let i=0;i<px.length;i+=8){const r=px[i],g=px[i+1],b=px[i+2],l=r*.299+g*.587+b*.114;tb+=l;n++;if(l<45)dk++;
+      const isRed=r>180&&g<100&&b<100,isGreen=g>180&&r<100&&b<100,isYellow=r>180&&g>150&&b<80;
+      if(isRed)rpAll++;if(isGreen)gpAll++;if(isYellow)ypAll++;
+      const py=Math.floor((i/4)/sw);if(py<sh*.6){if(isRed)rp++;if(isGreen)gp++;if(isYellow)yp++}}
+    const avg=Math.round(tb/n),st=Math.max(3,n*.0002);
+    ok({brightness:avg,isNight:avg<80||dk/n>.55,label:avg<65?"야간":avg<95?"새벽/야간":"주간",
+      red:rp>st||rpAll>st*2,green:gp>st||gpAll>st*2,yellow:yp>st||ypAll>st*2,
+      redCount:rpAll,greenCount:gpAll,yellowCount:ypAll})
+  }catch(e){ok({brightness:128,isNight:false,label:"오류",red:false,green:false,yellow:false,redCount:0,greenCount:0,yellowCount:0})}};
+  img.onerror=()=>ok({brightness:128,isNight:false,label:"오류",red:false,green:false,yellow:false,redCount:0,greenCount:0,yellowCount:0});img.src=du;
+})}
+
+/* ── Knowledge Base ── */
+const KB_KEY='mdlabs_kb_v4';
+function loadKB(){return SEC.safeJSON(KB_KEY,[])}
+function saveKB(kb){SEC.safeStore(KB_KEY,kb,200)}
+function parsePrecedent(rawText){
+  const text=SEC.validateText(rawText,5000);
+  const r={id:'P'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),rawText:text.slice(0,3000),caseNumber:null,court:null,date:null,accidentType:'차대차',faultA:50,faultB:50,keywords:[],legalBasis:[],keyFacts:[],summary:'',confidence:25,verified:false,createdAt:new Date().toISOString()};
+  for(const p of[/(\d{4}[가-힣]+\d{3,})/,/사건[번호:\s]*([^\n,]{5,25})/]){const m=text.match(p);if(m){r.caseNumber=m[1].trim();r.confidence+=15;break}}
+  for(const c of['대법원','서울중앙지방법원','서울고등법원','수원지방법원','인천지방법원','대전지방법원','부산지방법원']){if(text.includes(c)){r.court=c;r.confidence+=10;break}}
+  const dm=text.match(/(\d{4})[.\-\/년]\s*(\d{1,2})[.\-\/월]\s*(\d{1,2})/);
+  if(dm){r.date=`${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`;r.confidence+=5}
+  if(/보행자|횡단보도.*보행/.test(text))r.accidentType='차대사람';
+  else if(/자전거|이륜|오토바이/.test(text))r.accidentType='차대자전거';
+  const fm=text.match(/과실[비율:\s]*(\d{1,3})\s*[:%]\s*(\d{1,3})/)||text.match(/(\d{1,3})\s*[:%대]\s*(\d{1,3})\s*(?:과실|비율)/);
+  if(fm){const a=+fm[1],b=+fm[2];if(a+b>=90&&a+b<=110){r.faultA=Math.round(a/(a+b)*100);r.faultB=100-r.faultA;r.confidence+=20}}
+  ['신호위반','중앙선침범','차선변경','추돌','횡단보도','과속','음주','안전거리','급제동','비보호좌회전','우회전','유턴','역주행','보행자','자전거','교차로','고속도로','주차장','야간','우천','어린이','노인','직진','좌회전','우회전','끼어들기','합류','후진'].forEach(k=>{if(text.includes(k))r.keywords.push(k)});
+  if(r.keywords.length>=2)r.confidence+=10;
+  const laws=new Set();let lm;const re=/(?:도로교통법|민법|자동차손해배상보장법|교통사고처리특례법)\s*제?\s*\d+조?/g;
+  while((lm=re.exec(text)))laws.add(lm[0]);r.legalBasis=[...laws].slice(0,6);
+  r.keyFacts=text.split(/[.。\n]/).filter(s=>s.trim().length>15&&s.length<200).filter(s=>['사고','충돌','횡단','직진','추돌','차선','신호','과실','피해'].some(k=>s.includes(k))).slice(0,4).map(s=>s.trim());
+  r.summary=[r.caseNumber,r.court,r.accidentType,`${r.faultA}:${r.faultB}`].filter(Boolean).join(' · ');
+  r.confidence=Math.min(95,r.confidence);return r;
+}
+function findSimilar(text,kb,max=5){
+  if(!kb.length)return[];
+  const kw=[];
+  ['차선변경','추돌','횡단보도','과속','음주','안전거리','급제동','비보호좌회전','우회전','유턴','역주행','보행자','자전거','교차로','주차장','야간','후진','중앙선침범','직진','좌회전','합류'].forEach(k=>{if(text.includes(k))kw.push(k)});
+  let type='차대차';if(/보행자|사람/.test(text))type='차대사람';else if(/자전거|이륜/.test(text))type='차대자전거';
+  return kb.map(c=>{let s=0;if(c.accidentType===type)s+=30;(c.keywords||[]).forEach(k=>{if(kw.includes(k))s+=15});if(c.verified)s+=15;return{...c,matchScore:s}}).filter(x=>x.matchScore>=20).sort((a,b)=>b.matchScore-a.matchScore).slice(0,max);
+}
+
+/* ╔══════════════════════════════════════════════════════════════╗
+   ║  LAYER 4 — UI COMPONENTS                                    ║
+   ╚══════════════════════════════════════════════════════════════╝ */
+
+const STEPS=[
+  {id:"upload",icon:"📎",label:"자료 입력",desc:"텍스트·파일 확인"},
+  {id:"pdf",icon:"📄",label:"PDF 분석",desc:"PDF 텍스트 추출"},
+  {id:"ocr",icon:"🔍",label:"OCR 분석",desc:"이미지→텍스트 변환"},
+  {id:"video",icon:"🎬",label:"영상 환경분석",desc:"주야간·신호 추출"},
+  {id:"match",icon:"📋",label:"도표 매칭",desc:"과실비율 인정기준 검색"},
+  {id:"similar",icon:"🧠",label:"판례 검색",desc:"유사 판례 비교"},
+  {id:"result",icon:"⚖️",label:"결과 산출",desc:"과실비율+법적근거"},
+];
+
+function AgentPipeline({stepStates}){
+  return<div style={{background:"rgba(8,12,24,.6)",border:"1px solid rgba(99,102,241,.1)",borderRadius:16,padding:"14px 16px",marginBottom:14}}>
+    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
+      <div style={{width:7,height:7,borderRadius:4,background:Object.values(stepStates).some(s=>s.status==='running')?"#6366f1":"#1e293b",animation:Object.values(stepStates).some(s=>s.status==='running')?"pulse 1.2s infinite":"none"}}/>
+      <span style={{fontSize:10,fontWeight:700,color:"#94a3b8",letterSpacing:1}}>AI AGENT PIPELINE</span>
+      <span style={{fontSize:9,color:"#475569",marginLeft:"auto"}}>v7.0</span>
+    </div>
+    {STEPS.map((step,i)=>{const st=stepStates[step.id]||{status:'idle'};const isRun=st.status==='running',isDone=st.status==='done',isErr=st.status==='error',isSkip=st.status==='skip';
+    return<div key={step.id}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 8px",borderRadius:9,background:isRun?"rgba(99,102,241,.06)":"transparent",border:isRun?"1px solid rgba(99,102,241,.12)":"1px solid transparent",transition:"all .3s"}}>
+        <div style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,
+          background:isDone?"rgba(16,185,129,.08)":isErr?"rgba(239,68,68,.08)":isRun?"rgba(99,102,241,.1)":"rgba(15,23,42,.3)",
+          border:`1px solid ${isDone?"rgba(16,185,129,.18)":isErr?"rgba(239,68,68,.18)":isRun?"rgba(99,102,241,.2)":"rgba(30,41,59,.4)"}`}}>
+          {isRun?<div style={{width:12,height:12,border:"2px solid #6366f140",borderTopColor:"#6366f1",borderRadius:6,animation:"spin .7s linear infinite"}}/>:isDone?"✅":isErr?"❌":isSkip?"⏭️":step.icon}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,fontWeight:isRun?700:isDone?600:500,color:isDone?"#10b981":isErr?"#ef4444":isRun?"#e2e8f0":"#475569"}}>{step.label}</div>
+          <div style={{fontSize:9.5,color:isRun?"#94a3b8":"#334155",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.msg||step.desc}</div>
+        </div>
+        {isRun&&typeof st.progress==='number'&&st.progress>0&&<span style={{fontSize:10,fontWeight:800,fontFamily:"var(--mono)",color:"#818cf8"}}>{Math.round(st.progress)}%</span>}
+        {isDone&&<span style={{fontSize:9,color:"#10b981",fontWeight:600}}>완료</span>}
+      </div>
+      {isRun&&typeof st.progress==='number'&&st.progress>0&&<div style={{margin:"1px 40px 3px",height:2.5,borderRadius:2,background:"#1e293b",overflow:"hidden"}}><div style={{height:"100%",borderRadius:2,background:"linear-gradient(90deg,#6366f1,#3b82f6)",transition:"width .4s",width:`${Math.min(100,st.progress)}%`}}/></div>}
+      {i<STEPS.length-1&&<div style={{marginLeft:22,width:1,height:3,background:"#1e293b"}}/>}
+    </div>})}
+  </div>;
+}
+
+const C={bg:"#050810",card:"rgba(12,17,30,.82)",b1:"rgba(148,163,184,.08)",b2:"rgba(148,163,184,.18)",t1:"#f1f5f9",t2:"#94a3b8",t3:"#64748b",blue:"#3b82f6",indigo:"#6366f1",violet:"#8b5cf6",emerald:"#10b981",amber:"#f59e0b",red:"#ef4444",cyan:"#06b6d4"};
+const Tag=({children,color=C.indigo,sx})=><span style={{display:"inline-flex",padding:"3px 9px",borderRadius:7,fontSize:10.5,fontWeight:600,background:`${color}15`,color,border:`1px solid ${color}25`,...sx}}>{children}</span>;
+const Btn=({children,onClick,primary,disabled,small,sx})=><button onClick={onClick} disabled={disabled} style={{padding:small?"6px 14px":"11px 22px",borderRadius:small?8:12,border:primary?"none":`1px solid ${C.b2}`,background:disabled?"#1e293b":primary?`linear-gradient(135deg,${C.blue},${C.violet})`:"rgba(30,41,59,.5)",color:disabled?"#475569":primary?"#fff":C.t2,fontSize:small?11:13,fontWeight:600,cursor:disabled?"not-allowed":"pointer",transition:"all .25s",...sx}}>{children}</button>;
+const FBar=({la,lb,va,vb})=>{const[on,s]=useState(false);useEffect(()=>{s(false);setTimeout(()=>s(true),300)},[va,vb]);
+return<div style={{margin:"12px 0"}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><span style={{fontFamily:"var(--mono)",fontWeight:800,fontSize:12,color:C.blue}}>{la} {va}%</span><span style={{fontFamily:"var(--mono)",fontWeight:800,fontSize:12,color:C.red}}>{lb} {vb}%</span></div><div style={{display:"flex",height:40,borderRadius:20,overflow:"hidden",background:"#0c1222",border:`1px solid ${C.b1}`}}><div style={{display:"flex",alignItems:"center",justifyContent:"center",background:`linear-gradient(135deg,#1d4ed8,${C.blue})`,color:"#fff",fontWeight:800,fontSize:13,fontFamily:"var(--mono)",transition:"width 1.2s cubic-bezier(.16,1,.3,1)",width:on?`${va}%`:"0%",minWidth:va>0?38:0}}>{va>8&&`${va}%`}</div><div style={{display:"flex",alignItems:"center",justifyContent:"center",background:`linear-gradient(135deg,${C.red},#b91c1c)`,color:"#fff",fontWeight:800,fontSize:13,fontFamily:"var(--mono)",transition:"width 1.2s cubic-bezier(.16,1,.3,1)",width:on?`${vb}%`:"0%",minWidth:vb>0?38:0}}>{vb>8&&`${vb}%`}</div></div></div>};
+
+/* ╔══════════════════════════════════════════════════════════════╗
+   ║  LAYER 5 — MAIN APP                                         ║
+   ╚══════════════════════════════════════════════════════════════╝ */
+function App(){
+  const[kb,setKb]=useState(()=>loadKB());
+  const[input,setInput]=useState("");
+  const[files,setFiles]=useState([]);
+  const[pdfText,setPdfText]=useState("");
+  const[ocrResult,setOcrResult]=useState(null);
+  const[vidSrc,setVidSrc]=useState(null);
+  const[vidEnv,setVidEnv]=useState(null);
+  const[vidFrames,setVidFrames]=useState([]);
+  const vidRef=useRef(null);
+  const[result,setResult]=useState(null);
+  const[running,setRunning]=useState(false);
+  const[page,setPage]=useState("input");
+  const[showKB,setShowKB]=useState(false);
+  const[showReport,setShowReport]=useState(false);
+  const taRef=useRef(null);
+  const[stepStates,setStepStates]=useState({});
+  const setStep=(id,status,progress,msg)=>setStepStates(p=>({...p,[id]:{status,progress:progress??p[id]?.progress,msg:msg??p[id]?.msg}}));
+  const resetSteps=()=>setStepStates({});
+  const mx={maxWidth:900,margin:"0 auto",padding:"0 16px"};
+  const stats=useMemo(()=>({total:kb.length,verified:kb.filter(c=>c.verified).length}),[kb]);
+  const addToKB=entry=>{const n=[entry,...kb];setKb(n);saveKB(n)};
+  const removeFromKB=id=>{const n=kb.filter(c=>c.id!==id);setKb(n);saveKB(n)};
+
+  function checkPDF(f){
+    if(!f)return false;
+    if(f.type==='application/pdf')return true;
+    return(f.name||'').toLowerCase().endsWith('.pdf');
+  }
+  const addFiles=fl=>{
+    const arr=Array.from(fl).map(f=>{
+      const check=SEC.validateFile(f);
+      if(!check.ok){alert(check.reason);return null}
+      const pdf=checkPDF(f);
+      return{file:f,name:SEC.sanitize(f.name||'unknown'),type:f.type||'',size:f.size||0,preview:null,id:Date.now()+'-'+Math.random().toString(36).slice(2),pdf};
+    }).filter(Boolean);
+    arr.forEach(nf=>{
+      if(nf.type.startsWith('image/')){const r=new FileReader();r.onload=e=>{nf.preview=e.target.result;setFiles(p=>[...p])};r.readAsDataURL(nf.file)}
+      if(nf.type.startsWith('video/')){setVidSrc(URL.createObjectURL(nf.file));setVidFrames([]);setVidEnv(null)}
+    });
+    setFiles(p=>[...p,...arr]);
+  };
+
+  // ═══ FULL ANALYSIS ═══
+  const runAnalysis=useCallback(async()=>{
+    if(running)return;
+    const safeInput=SEC.validateText(input);
+    const hasText=safeInput.trim().length>=5;
+    const hasPDF=files.some(f=>f.pdf===true||checkPDF(f.file));
+    const hasImage=files.some(f=>f.type?.startsWith('image/'));
+    const hasVideo=!!vidSrc;
+    if(!hasText&&!hasPDF&&!hasImage&&!hasVideo)return;
+    setRunning(true);setResult(null);setPdfText("");setOcrResult(null);resetSteps();
+    let combined=safeInput.trim();
+
+    // Step 1
+    setStep("upload","done",100,"입력 확인 완료"+(hasPDF?" · PDF감지":"")+(hasImage?" · 이미지":"")+(hasVideo?" · 영상":""));
+    await new Promise(r=>setTimeout(r,200));
+
+    // Step 2: PDF
+    if(hasPDF){
+      setStep("pdf","running",0,"PDF 텍스트 직접 추출 시작...");
+      const pf=files.find(f=>f.pdf===true||checkPDF(f.file));
+      try{
+        const pr=await extractPDFText(pf.file,msg=>setStep("pdf","running",null,msg),pct=>setStep("pdf","running",pct));
+        if(pr.text&&pr.text.length>20){
+          setPdfText(pr.text);combined=combined?combined+"\n\n[PDF 추출]\n"+pr.text:pr.text;
+          setStep("pdf","done",100,`${pr.text.length}자 추출 (${pr.extracted}/${pr.totalPages}페이지)`);
+        }else{
+          setStep("pdf","running",50,"텍스트 없음 → 이미지 OCR 시도...");
+          try{
+            const imgs=await renderPDFToImages(pf.file,msg=>setStep("pdf","running",null,msg),pct=>setStep("pdf","running",50+pct*0.2));
+            if(imgs.length>0&&await ensureTesseract()){
+              let ocrText='';
+              for(let i=0;i<imgs.length;i++){setStep("pdf","running",70+Math.round((i/imgs.length)*25),`페이지 ${i+1} OCR...`);
+                try{const r=await runOCR(imgs[i],null,null);if(r.text)ocrText+=`\n[p${i+1}] ${r.text}`}catch(e){}}
+              if(ocrText.length>10){setPdfText(ocrText);combined+="\n\n[PDF OCR]\n"+ocrText;setStep("pdf","done",100,`OCR ${ocrText.length}자 추출`)}
+              else setStep("pdf","done",100,"텍스트 추출 실패");
+            }else{setStep("pdf","done",100,"이미지 PDF — OCR 불가")}
+          }catch(e2){setStep("pdf","error",null,e2.message)}
+        }
+      }catch(e){setStep("pdf","error",null,e.message)}
+      await new Promise(r=>setTimeout(r,200));
+    }else{setStep("pdf","skip",null,"PDF 없음")}
+
+    // Step 3: OCR
+    if(hasImage){
+      setStep("ocr","running",0,"이미지 OCR...");
+      const img=files.find(f=>f.type?.startsWith('image/'));
+      try{
+        const res=await runOCR(img.file,msg=>setStep("ocr","running",null,msg),pct=>setStep("ocr","running",pct));
+        if(res.text?.length>3){setOcrResult(res);combined+="\n\n[OCR]\n"+res.text;setStep("ocr","done",100,`${res.text.length}자 · 신뢰도${res.confidence}%`)}
+        else setStep("ocr","done",100,"텍스트 없음");
+      }catch(e){setStep("ocr","error",null,e.message)}
+      await new Promise(r=>setTimeout(r,200));
+    }else{setStep("ocr","skip",null,"이미지 없음")}
+
+    // Step 4: Video
+    if(hasVideo&&vidRef.current){
+      setStep("video","running",0,"프레임 추출...");
+      try{
+        const fr=await grabFrames(vidRef.current,10,msg=>setStep("video","running",null,msg));
+        setVidFrames(fr);
+        if(fr.length>0){
+          const envs=[];for(let i=0;i<fr.length;i++){setStep("video","running",Math.round((i/fr.length)*80+20));envs.push(await analyzeEnv(fr[i].url))}
+          const nightN=envs.filter(e=>e.isNight).length,avgBr=Math.round(envs.reduce((s,e)=>s+e.brightness,0)/envs.length);
+          const env={perFrame:envs,timeOfDay:nightN>fr.length/2?"야간":"주간",avgBr,
+            hasRed:envs.some(e=>e.red),hasGreen:envs.some(e=>e.green),hasYellow:envs.some(e=>e.yellow),
+            redTotal:envs.reduce((s,e)=>s+(e.redCount||0),0),greenTotal:envs.reduce((s,e)=>s+(e.greenCount||0),0),
+            yellowTotal:envs.reduce((s,e)=>s+(e.yellowCount||0),0)};
+          setVidEnv(env);
+          let et=`\n[영상환경: ${env.timeOfDay} 밝기${avgBr}]`;
+          if(env.hasRed||env.hasGreen||env.hasYellow){
+            et+=" 교차로 신호";
+            if(env.hasRed)et+=" 적색 적색신호";
+            if(env.hasGreen)et+=" 녹색 녹색신호 직진";
+            if(env.hasYellow)et+=" 황색";
+            if(env.hasRed&&env.hasGreen)et+=" 신호위반 직진 교차로사고";
+          }
+          if(env.timeOfDay==="야간")et+=" 야간 야간사고";
+          if(!safeInput.trim()){
+            et+=" 직진 차대차 충돌 사고 교차로";
+            if(env.hasRed&&env.hasGreen)et+=" 녹색직진 적색직진 신호교차로";
+            else if(env.hasRed)et+=" 적색 신호위반 교차로";
+            else if(env.hasGreen)et+=" 녹색 직진 교차로";
+            else et+=" 무신호";
+          }
+          combined+=et;
+          setStep("video","done",100,`${env.timeOfDay} · 밝기${avgBr} ${env.hasRed?"🔴":""}${env.hasGreen?"🟢":""}${env.hasYellow?"🟡":""} ${!env.hasRed&&!env.hasGreen&&!env.hasYellow?"(신호미감지)":""}`);
+        }
+      }catch(e){setStep("video","error",null,e.message)}
+      await new Promise(r=>setTimeout(r,200));
+    }else{setStep("video","skip",null,"영상 없음")}
+
+    // Step 5: Diagram match
+    if(combined.length<5){setStep("match","error",null,"텍스트 부족");setRunning(false);return}
+    setStep("match","running",40,`${DB.length}개 도표 대조 중...`);
+    await new Promise(r=>setTimeout(r,400));
+    const m=matchDiagram(combined);
+    if(!m){
+      setStep("match","error",null,"매칭 도표 없음");
+      setResult({error:true,text:combined});setRunning(false);setPage("result");return;
+    }
+    setStep("match","done",100,`${m.match.id} · ${m.match.t} (점수:${m.matchScore})`);
+    await new Promise(r=>setTimeout(r,200));
+
+    // Step 6: Similar
+    setStep("similar","running",50,"유사 판례 검색...");
+    await new Promise(r=>setTimeout(r,300));
+    const sim=findSimilar(combined,kb);
+    setStep("similar","done",100,sim.length?`${sim.length}건`:"없음");
+    await new Promise(r=>setTimeout(r,150));
+
+    // Step 7: Result
+    setStep("result","running",60,"과실비율 산출...");
+    await new Promise(r=>setTimeout(r,400));
+    const mods=detectMods(combined);
+    const{fA,fB}=calcFault(m.match,mods);
+    const isPed=m.match.bf.p!==undefined;
+    const resultObj={diagram:m.match,confidence:m.confidence,matchScore:m.matchScore,alts:m.alts,faultA:fA,faultB:fB,
+      labelA:m.match.la||(isPed?"차량":"A"),labelB:m.match.lb||(isPed?"보행자":"B"),
+      mods,appliedMods:(m.match.mods||[]).map(mod=>({...mod,applied:mods.some(dm=>mod.n.includes(dm)||dm.includes(mod.n))})),
+      laws:getLaws(m.match,combined),similar:sim,text:combined};
+    resultObj.analysis=generateAnalysis(resultObj,safeInput);
+    setResult(resultObj);
+    setStep("result","done",100,`${m.match.id} · ${fA}:${fB}`);
+    setRunning(false);setPage("result");
+  },[input,files,vidSrc,kb,running]);
+
+  const examples=["편도 2차로에서 1차로 직진 중 2차로 차량이 깜빡이 없이 차선변경하여 측면 충돌","횡단보도 녹색신호에 보행자 횡단 중 우회전 차량에 충격","무신호 교차로에서 직진 중 좌측 좁은 도로에서 나온 차량과 충돌","주차장 통로 직진 중 후진 출차 차량과 접촉","고속도로에서 앞차 급정거로 추돌","비보호좌회전 중 직진 차량과 교차로에서 충돌","중앙선 침범 차량과 정면 충돌"];
+
+  /* ═══════════ AI 감정서 ═══════════ */
+  const genReportId=()=>'MDL-'+new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+  const reportId=useMemo(()=>genReportId(),[result]);
+  const now=new Date();
+  const fmtDate=`${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일`;
+  const fmtTime=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  function AIReport({r,pdfText,ocrResult,vidEnv,onClose}){
+    if(!r||r.error)return null;
+    const d=r.diagram;const printRef=useRef(null);
+
+    const handlePrint=()=>{
+      const w=window.open('','_blank','width=900,height=1200');
+      if(!w)return;const el=printRef.current;if(!el)return;
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>AI 감정서 - ${SEC.sanitize(reportId)}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          *{margin:0;padding:0;box-sizing:border-box}
+          body{font-family:'Noto Sans KR',sans-serif;color:#1a1a2e;background:#fff;padding:40px 50px;font-size:12px;line-height:1.8}
+          .report-header{text-align:center;border-bottom:3px double #1a1a2e;padding-bottom:20px;margin-bottom:30px}
+          .section{margin-bottom:22px}.section-title{font-size:14px;font-weight:800;color:#1a1a2e;border-left:4px solid #3b5998;padding-left:10px;margin-bottom:10px}
+          .section-body{padding-left:14px;font-size:12px;line-height:2}
+          .fault-bar{display:flex;height:32px;border-radius:16px;overflow:hidden;border:1px solid #ddd;margin:10px 0}
+          .fault-bar-a{background:#3b5998;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+          .fault-bar-b{background:#c0392b;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}
+          table{width:100%;border-collapse:collapse;margin:8px 0;font-size:11px}
+          th{background:#f0f0f5;padding:7px 10px;text-align:left;border:1px solid #ddd;font-weight:700}
+          td{padding:7px 10px;border:1px solid #ddd;vertical-align:top}
+          .law-item{padding:6px 10px;border-left:3px solid #3b5998;background:#f8f9ff;margin-bottom:6px;border-radius:0 4px 4px 0}
+          .disclaimer{margin-top:30px;padding:14px;border:1px solid #e0e0e0;border-radius:6px;background:#fefefe;font-size:10px;color:#888;text-align:center;line-height:1.8}
+          .stamp{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;border:2px solid #3b5998;border-radius:50%;width:62px;height:62px;text-align:center;font-weight:900;font-size:10px;color:#3b5998;margin-top:10px;line-height:1.3}
+          @media print{body{padding:20px 30px}@page{margin:15mm}}
+        </style></head><body>`);
+      w.document.write(el.innerHTML);
+      w.document.write('</body></html>');
+      w.document.close();setTimeout(()=>{w.print()},600);
+    };
+
+    const TS={hdr:{textAlign:"center",borderBottom:"3px double #1a1a2e",paddingBottom:20,marginBottom:28},
+      sec:{marginBottom:24},st:{fontSize:14,fontWeight:800,borderLeft:"4px solid #3b5998",paddingLeft:10,marginBottom:10},
+      sb:{paddingLeft:14},th:{background:"#f0f0f5",padding:"8px 12px",border:"1px solid #ddd",fontWeight:700},
+      td:{padding:"8px 12px",border:"1px solid #ddd"}};
+
+    return<div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,.85)",backdropFilter:"blur(8px)",overflowY:"auto",animation:"fadeUp .3s"}}>
+      <div style={{maxWidth:860,margin:"20px auto",padding:"0 12px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,position:"sticky",top:10,zIndex:10}}>
+          <button onClick={onClose} style={{padding:"8px 16px",borderRadius:10,border:`1px solid ${C.b2}`,background:"rgba(15,23,42,.9)",color:C.t2,fontSize:12,fontWeight:600,cursor:"pointer",backdropFilter:"blur(10px)"}}>← 돌아가기</button>
+          <button onClick={handlePrint} style={{padding:"8px 18px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.blue},${C.violet})`,color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>🖨️ 인쇄 / PDF 저장</button>
+        </div>
+        <div ref={printRef} style={{background:"#fff",color:"#1a1a2e",borderRadius:12,padding:"clamp(24px,4vw,48px)",fontFamily:"'Noto Sans KR',sans-serif",fontSize:12,lineHeight:2,boxShadow:"0 8px 60px rgba(0,0,0,.5)"}}>
+
+          {/* HEADER */}
+          <div style={TS.hdr}>
+            <div style={{fontSize:11,color:"#3b5998",fontWeight:700,letterSpacing:3,marginBottom:4}}>MD LABS AI ANALYSIS v7.0</div>
+            <div style={{fontSize:"clamp(22px,4vw,28px)",fontWeight:900,letterSpacing:2}}>교통사고 과실비율 AI 감정서</div>
+            <div style={{fontSize:12,color:"#666",marginTop:6}}>손해보험협회 과실비율 인정기준 기반 AI 분석 보고서</div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:"#888",marginTop:14,padding:"0 10px"}}>
+              <span>문서번호: <b style={{color:"#333"}}>{reportId}</b></span>
+              <span>분석일시: <b style={{color:"#333"}}>{fmtDate} {fmtTime}</b></span>
+            </div>
+          </div>
+
+          {/* 1. 사고 개요 */}
+          <div style={TS.sec}><div style={TS.st}>제1장 사고 개요</div><div style={TS.sb}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11.5}}>
+              <tbody>
+                <tr><th style={{...TS.th,width:"25%"}}>사고 유형</th><td style={TS.td}>{d.cat}</td>
+                    <th style={{...TS.th,width:"25%"}}>세부 분류</th><td style={TS.td}>{d.sub}</td></tr>
+                <tr><th style={TS.th}>적용 도표</th><td style={TS.td}><b>{d.id}</b> — {d.t}</td>
+                    <th style={TS.th}>매칭 신뢰도</th><td style={TS.td}>{r.confidence==="상"?"■■■ 상 ("+r.matchScore+"점)":r.confidence==="중"?"■■□ 중 ("+r.matchScore+"점)":"■□□ 하 ("+r.matchScore+"점)"}</td></tr>
+                <tr><th style={TS.th}>당사자 A</th><td style={TS.td}>{r.labelA}</td>
+                    <th style={TS.th}>당사자 B</th><td style={TS.td}>{r.labelB}</td></tr>
+              </tbody>
+            </table>
+            {input.trim()&&<div style={{marginTop:10,padding:10,background:"#f8f9ff",borderRadius:6,border:"1px solid #e8e8f0"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#666",marginBottom:3}}>사고 상황 기술</div>
+              <div style={{fontSize:11.5,lineHeight:1.9,color:"#2c3e50"}}>{SEC.sanitize(input.trim())}</div>
+            </div>}
+          </div></div>
+
+          {/* 2. 증거 분석 */}
+          <div style={TS.sec}><div style={TS.st}>제2장 증거자료 분석</div><div style={TS.sb}>
+            {pdfText&&<div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#3b5998",marginBottom:4}}>2-1. PDF 문서 텍스트 추출</div>
+              <div style={{padding:8,background:"#f5f5fa",borderRadius:6,border:"1px solid #e0e0e8",fontSize:10.5,lineHeight:1.7,maxHeight:120,overflow:"hidden",color:"#555"}}>{SEC.sanitize(pdfText.slice(0,800))}...</div>
+            </div>}
+            {ocrResult?.text&&<div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#3b5998",marginBottom:4}}>OCR 분석 (신뢰도 {ocrResult.confidence}%)</div>
+              <div style={{padding:8,background:"#f5f5fa",borderRadius:6,border:"1px solid #e0e0e8",fontSize:10.5,lineHeight:1.7,maxHeight:80,overflow:"hidden",color:"#555"}}>{SEC.sanitize(ocrResult.text.slice(0,500))}</div>
+            </div>}
+            {vidEnv&&<div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#3b5998",marginBottom:4}}>영상 환경 분석</div>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <tbody>
+                  <tr><th style={{...TS.th,width:"30%"}}>시간대</th><td style={TS.td}>{vidEnv.timeOfDay} (평균 밝기 {vidEnv.avgBr})</td></tr>
+                  <tr><th style={TS.th}>신호 감지</th><td style={TS.td}>{vidEnv.hasRed?"🔴 적색 ":""}{vidEnv.hasGreen?"🟢 녹색 ":""}{vidEnv.hasYellow?"🟡 황색 ":""}{!vidEnv.hasRed&&!vidEnv.hasGreen&&!vidEnv.hasYellow?"미감지":""}</td></tr>
+                  <tr><th style={TS.th}>분석 프레임</th><td style={TS.td}>{vidEnv.perFrame?.length||0}개</td></tr>
+                </tbody>
+              </table>
+            </div>}
+            {!pdfText&&!ocrResult?.text&&!vidEnv&&<div style={{fontSize:11,color:"#999",fontStyle:"italic"}}>첨부 증거자료 없음 — 텍스트 입력 기반 분석</div>}
+          </div></div>
+
+          {/* 3. 과실비율 */}
+          <div style={TS.sec}><div style={TS.st}>제3장 과실비율 산정 결과</div><div style={TS.sb}>
+            <div style={{fontSize:11.5,lineHeight:2,marginBottom:12,color:"#333",whiteSpace:"pre-line"}}>{r.analysis||`도표 ${d.id}(${d.t})을 적용하여 과실비율을 산정합니다.`}</div>
+            <div style={{display:"flex",height:36,borderRadius:18,overflow:"hidden",border:"2px solid #ddd",margin:"14px 0"}}>
+              <div className="fault-bar-a" style={{width:`${r.faultA}%`,minWidth:r.faultA>0?40:0,background:"linear-gradient(135deg,#2c5aa0,#3b82f6)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14}}>{r.faultA>8?`${r.faultA}%`:""}</div>
+              <div className="fault-bar-b" style={{width:`${r.faultB}%`,minWidth:r.faultB>0?40:0,background:"linear-gradient(135deg,#c0392b,#e74c3c)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14}}>{r.faultB>8?`${r.faultB}%`:""}</div>
+            </div>
+            <div style={{display:"flex",gap:20,justifyContent:"center",margin:"16px 0"}}>
+              {[{l:r.labelA,v:r.faultA,c:"#2c5aa0"},{l:r.labelB,v:r.faultB,c:"#c0392b"}].map((p,i)=>
+                <div key={i} style={{textAlign:"center",padding:"14px 30px",border:`2px solid ${p.c}30`,borderRadius:10,minWidth:150,background:`${p.c}05`}}>
+                  <div style={{fontSize:11,color:"#666",marginBottom:4,fontWeight:600}}>{p.l}</div>
+                  <div style={{fontSize:34,fontWeight:900,color:p.c}}>{p.v}%</div>
+                </div>)}
+            </div>
+            <div style={{textAlign:"center",fontSize:13,fontWeight:800,color:"#1a1a2e",margin:"10px 0",padding:8,background:"#f0f4ff",borderRadius:6}}>
+              과실비율 = {r.labelA} <span style={{color:"#2c5aa0"}}>{r.faultA}%</span> : {r.labelB} <span style={{color:"#c0392b"}}>{r.faultB}%</span>
+            </div>
+          </div></div>
+
+          {/* 4. 수정요소 */}
+          <div style={TS.sec}><div style={TS.st}>제4장 수정요소 검토</div><div style={TS.sb}>
+            <div style={{fontSize:11,lineHeight:2,marginBottom:8,color:"#555"}}>
+              기본 과실비율({d.bf.p!==undefined?`보행자 ${d.bf.p}%`:`A ${d.bf.a||0} : B ${d.bf.b||0}`})에 대하여 {MODS_DB.length}개 수정요소를 검토하였습니다.
+            </div>
+            {r.appliedMods?.length>0?<table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead><tr><th style={TS.th}>수정요소</th><th style={{...TS.th,width:"15%"}}>조정</th><th style={{...TS.th,width:"15%"}}>대상</th><th style={{...TS.th,width:"15%"}}>적용</th></tr></thead>
+              <tbody>{r.appliedMods.map((m,i)=><tr key={i} style={{background:m.applied?"#f0fff4":"#fff"}}>
+                <td style={TS.td}>{m.n}</td>
+                <td style={{...TS.td,textAlign:"center",fontWeight:700,color:m.v>0?"#c0392b":"#2c5aa0"}}>{m.v>0?"+":""}{m.v}%</td>
+                <td style={{...TS.td,textAlign:"center"}}>{m.tg==='a'?r.labelA:m.tg==='b'?r.labelB:"공통"}</td>
+                <td style={{...TS.td,textAlign:"center",fontWeight:700,color:m.applied?"#16a34a":"#999"}}>{m.applied?"적용":"미적용"}</td>
+              </tr>)}</tbody>
+            </table>:<div style={{fontSize:11,color:"#999",fontStyle:"italic"}}>해당 도표의 수정요소 없음</div>}
+            {r.mods?.length>0&&<div style={{marginTop:8,fontSize:11,color:"#3b5998"}}>✓ 감지된 수정요소: {r.mods.join(', ')}</div>}
+          </div></div>
+
+          {/* 5. 법적 근거 */}
+          {r.laws?.length>0&&<div style={TS.sec}><div style={TS.st}>제5장 관련 법적 근거</div><div style={TS.sb}>
+            {r.laws.map((l,i)=><div key={i} style={{padding:"7px 12px",borderLeft:"3px solid #3b5998",background:"#f8f9ff",marginBottom:6,borderRadius:"0 4px 4px 0"}}>
+              <div style={{fontWeight:700,color:"#2c3e50",fontSize:11.5}}>{l.a}</div>
+              <div style={{color:"#666",fontSize:10.5}}>{l.d}</div>
+            </div>)}
+          </div></div>}
+
+          {/* 6. 유사 도표 */}
+          {r.alts?.length>0&&<div style={TS.sec}><div style={TS.st}>제6장 유사 적용 도표</div><div style={TS.sb}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead><tr><th style={{...TS.th,width:"15%"}}>도표번호</th><th style={TS.th}>사고 유형</th><th style={{...TS.th,width:"15%"}}>매칭점수</th></tr></thead>
+              <tbody>{r.alts.map(a=><tr key={a.id}>
+                <td style={{...TS.td,fontWeight:700,color:"#3b5998"}}>{a.id}</td>
+                <td style={TS.td}>{a.t}</td>
+                <td style={{...TS.td,textAlign:"center"}}>{a.score}점</td>
+              </tr>)}</tbody>
+            </table>
+          </div></div>}
+
+          {/* 7. 유사 판례 */}
+          {r.similar?.length>0&&<div style={TS.sec}><div style={TS.st}>제7장 유사 판례 분석</div><div style={TS.sb}>
+            {r.similar.map(c=><div key={c.id} style={{padding:8,border:"1px solid #e8e8f0",borderRadius:6,marginBottom:6,background:"#fafafa"}}>
+              <div style={{fontSize:11,fontWeight:700}}>{c.accidentType} — {c.caseNumber||"판례번호 미상"}</div>
+              <div style={{fontSize:10.5,color:"#666"}}>과실비율: {c.faultA}% : {c.faultB}% {c.court&&`| ${c.court}`}</div>
+            </div>)}
+          </div></div>}
+
+          {/* 8. 종합 의견 */}
+          <div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#c0392b"}}>제8장 종합 의견</div><div style={{...TS.sb,fontSize:11.5,lineHeight:2.2,color:"#333"}}>
+            <p>본 건 교통사고에 대하여 손해보험협회 「자동차사고 과실비율 인정기준(2023.6)」을 적용하여 분석한 결과,
+            도표 <b>{d.id}</b>({d.t})이 가장 적합한 것으로 판단됩니다.</p>
+            <p style={{marginTop:8}}>기본 과실비율({d.bf.p!==undefined?`보행자 ${d.bf.p}%`:`A ${d.bf.a||0}% : B ${d.bf.b||0}%`})에
+            {r.mods?.length>0?` 수정요소(${r.mods.join(', ')})를 반영하여`:' 수정요소 없이'}
+            {' '}최종 과실비율을 <b>{r.labelA} {r.faultA}% : {r.labelB} {r.faultB}%</b>로 산정합니다.</p>
+            {vidEnv&&<p style={{marginTop:8}}>영상 환경 분석 결과 사고 당시 <b>{vidEnv.timeOfDay}</b>(평균밝기 {vidEnv.avgBr})이며,
+            {vidEnv.hasRed||vidEnv.hasGreen?" 신호등이 감지되어 신호교차로 사고로 판단됩니다.":" 신호등 감지가 명확하지 않아 추가 확인이 필요합니다."}</p>}
+            <p style={{marginTop:12,fontWeight:700,color:"#c0392b"}}>본 감정서는 AI 분석에 기반한 참고자료이며, 법적 구속력이 없습니다.
+            정확한 과실비율은 보험사 심의 또는 법원 판단을 통해 최종 확정됩니다.</p>
+          </div></div>
+
+          {/* FOOTER */}
+          <div style={{marginTop:30,padding:14,border:"1px solid #e0e0e0",borderRadius:6,background:"#fefefe",fontSize:10,color:"#888",textAlign:"center",lineHeight:1.8}}>
+            본 감정서는 손해보험협회 「자동차사고 과실비율 인정기준(2023년 6월)」을 기반으로 AI가 자동 생성한 참고 문서입니다.<br/>
+            법적 효력이 없으며, 실제 보상 및 소송에서의 과실비율은 관련 법률 및 판례에 따라 달리 적용될 수 있습니다.<br/>
+            정확한 과실비율 판단은 보험사, 손해사정인 또는 법률전문가에게 문의하시기 바랍니다.
+          </div>
+          <div style={{textAlign:"center",marginTop:20,paddingTop:16,borderTop:"2px solid #1a1a2e"}}>
+            <div style={{fontSize:13,fontWeight:800,letterSpacing:1}}>MD Labs</div>
+            <div style={{fontSize:10,color:"#666",marginTop:2}}>AI Mobility Data Intelligence</div>
+            <div className="stamp" style={{display:"inline-flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:"2px solid #3b5998",borderRadius:"50%",width:62,height:62,textAlign:"center",fontWeight:900,fontSize:10,color:"#3b5998",marginTop:10,lineHeight:1.3}}>
+              <span>MD Labs</span><span style={{fontSize:8}}>AI v7</span>
+            </div>
+            <div style={{fontSize:9,color:"#aaa",marginTop:10}}>Document ID: {reportId} | Generated: {fmtDate} {fmtTime}</div>
+          </div>
+        </div>
+      </div>
+    </div>;
+  }
+
+  // ═══ RESULT PAGE ═══
+  if(page==="result"){
+    const r=result;
+    return<div style={{minHeight:"100vh",background:C.bg,color:C.t1,fontFamily:"var(--sans)"}}>
+      <div style={{padding:"10px 16px",background:"rgba(6,9,16,.9)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,zIndex:50}}>
+        <div style={{...mx,display:"flex",alignItems:"center",justifyContent:"space-between",padding:0}}>
+          <button onClick={()=>{setPage("input");resetSteps();setShowReport(false)}} style={{background:"none",border:"none",color:C.t2,cursor:"pointer",fontSize:16,padding:"4px 6px"}}>← 돌아가기</button>
+          <Btn small primary onClick={()=>{setInput("");setResult(null);setFiles([]);setVidSrc(null);setVidEnv(null);setVidFrames([]);setOcrResult(null);setPdfText("");resetSteps();setShowReport(false);setPage("input")}}>🔄 새 분석</Btn>
+          {result&&!result.error&&<button onClick={()=>setShowReport(true)} style={{padding:"5px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2c5aa0,#6366f1)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",marginLeft:6}}>📄 AI 감정서</button>}
+        </div>
+      </div>
+      <div style={{...mx,paddingTop:14,paddingBottom:80}}>
+        <AgentPipeline stepStates={stepStates}/>
+        {r?.error?
+          <div style={{background:C.card,border:`1px solid ${C.amber}20`,borderRadius:16,padding:24,textAlign:"center",animation:"fadeUp .3s"}}>
+            <div style={{fontSize:36,marginBottom:8}}>🤔</div>
+            <p style={{fontSize:14,fontWeight:700,color:"#fcd34d",marginBottom:6}}>도표 매칭 실패</p>
+            {vidEnv&&<div style={{background:"rgba(99,102,241,.06)",border:"1px solid rgba(99,102,241,.12)",borderRadius:10,padding:10,marginBottom:12,textAlign:"left"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#818cf8",marginBottom:4}}>🎬 영상에서 감지된 정보:</div>
+              <div style={{fontSize:11,color:C.t2,lineHeight:1.6}}>
+                시간대: <b style={{color:vidEnv.timeOfDay==="야간"?"#fbbf24":"#60a5fa"}}>{vidEnv.timeOfDay}</b> (밝기 {vidEnv.avgBr})<br/>
+                {vidEnv.hasRed&&<>🔴 적색 신호 감지<br/></>}
+                {vidEnv.hasGreen&&<>🟢 녹색 신호 감지<br/></>}
+                {vidEnv.hasYellow&&<>🟡 황색 신호 감지<br/></>}
+                {!vidEnv.hasRed&&!vidEnv.hasGreen&&!vidEnv.hasYellow&&<>신호등 색상 미감지<br/></>}
+              </div>
+            </div>}
+            <p style={{fontSize:11,color:C.t2,lineHeight:1.7,marginBottom:12}}>
+              영상만으로는 사고 유형을 정확히 판단하기 어렵습니다.<br/>
+              <b style={{color:"#e2e8f0"}}>사고 상황을 텍스트로 함께 입력</b>해주세요.
+            </p>
+            <div style={{textAlign:"left",marginBottom:12}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:4}}>💡 입력 예시:</div>
+              {["교차로에서 녹색 직진 중 적색 신호위반 차량과 충돌","차선변경 중 측면 충돌","비보호좌회전 중 직진 차량과 충돌","후행차가 추돌","주차장에서 출차 중 통로 직진 차량과 접촉"].map((ex,i)=>
+                <button key={i} onClick={()=>{setInput(ex);setPage("input");resetSteps()}} style={{display:"block",width:"100%",textAlign:"left",padding:"6px 10px",borderRadius:7,border:`1px solid ${C.b1}`,background:"rgba(12,17,30,.5)",color:C.t2,fontSize:10.5,cursor:"pointer",marginBottom:2,lineHeight:1.5}}>
+                  <span style={{color:C.indigo,marginRight:4}}>▸</span>{ex}
+                </button>)}
+            </div>
+            <Btn primary onClick={()=>{setPage("input");resetSteps()}}>다시 입력</Btn>
+          </div>
+        :r&&(()=>{const d=r.diagram;return<div style={{animation:"fadeUp .3s"}}>
+          <div style={{background:`linear-gradient(135deg,rgba(59,130,246,.06),rgba(139,92,246,.04))`,border:`1px solid rgba(99,102,241,.12)`,borderRadius:18,padding:20,marginBottom:14}}>
+            <div style={{display:"flex",gap:5,marginBottom:10,flexWrap:"wrap"}}><Tag color={C.blue}>{d.cat}</Tag><Tag color={C.amber}>{d.id}</Tag><Tag>{d.sub}</Tag><Tag color={r.confidence==="상"?C.emerald:C.amber}>신뢰도:{r.confidence} ({r.matchScore}점)</Tag></div>
+            <h2 style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:2}}>{d.t}</h2>
+            <FBar la={r.labelA} lb={r.labelB} va={r.faultA} vb={r.faultB}/>
+            <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+              {[{l:r.labelA,v:r.faultA,c:C.blue},{l:r.labelB,v:r.faultB,c:C.red}].map((p,i)=>
+                <div key={i} style={{flex:1,maxWidth:180,padding:14,borderRadius:14,textAlign:"center",background:`${p.c}06`,border:`1px solid ${p.c}12`}}>
+                  <div style={{fontSize:10,color:p.c,fontWeight:600,marginBottom:3}}>{p.l}</div>
+                  <div style={{fontSize:28,fontWeight:900,color:p.c,fontFamily:"var(--mono)"}}>{p.v}%</div>
+                </div>)}
+            </div>
+          </div>
+
+          {r.alts?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>📋 유사 도표</div>
+            {r.alts.map(a=><div key={a.id} style={{padding:"5px 8px",borderRadius:7,background:"rgba(6,9,16,.3)",marginBottom:3,fontSize:11,color:C.t2}}>
+              <Tag color={C.t3} sx={{fontSize:9,marginRight:4}}>{a.id}</Tag>{a.t} <span style={{fontSize:9,color:C.t3}}>({a.score}점)</span>
+            </div>)}
+          </div>}
+
+          {pdfText&&<div style={{background:C.card,border:`1px solid ${C.cyan}10`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}><span>📄</span><span style={{fontSize:11,fontWeight:700,color:C.t3}}>PDF 추출 텍스트</span></div>
+            <pre style={{padding:8,borderRadius:8,background:"rgba(6,9,16,.5)",fontSize:10,color:C.t2,lineHeight:1.5,whiteSpace:"pre-wrap",fontFamily:"var(--mono)",maxHeight:150,overflowY:"auto"}}>{pdfText.slice(0,3000)}</pre>
+            <Btn small onClick={()=>{addToKB(parsePrecedent(pdfText))}} sx={{marginTop:6,fontSize:10}}>🧠 학습DB 저장</Btn>
+          </div>}
+
+          {ocrResult?.text&&<div style={{background:C.card,border:`1px solid ${C.cyan}10`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🔍 OCR 텍스트 (신뢰도 {ocrResult.confidence}%)</div>
+            <pre style={{padding:8,borderRadius:8,background:"rgba(6,9,16,.5)",fontSize:10,color:C.t2,whiteSpace:"pre-wrap",maxHeight:100,overflowY:"auto"}}>{ocrResult.text}</pre>
+          </div>}
+
+          {vidEnv&&<div style={{background:C.card,border:`1px solid ${C.violet}10`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🎬 영상 환경</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><Tag color={vidEnv.timeOfDay==="야간"?C.amber:C.blue}>{vidEnv.timeOfDay}</Tag><Tag>밝기{vidEnv.avgBr}</Tag>{vidEnv.hasRed&&<Tag color={C.red}>🔴 적색</Tag>}{vidEnv.hasGreen&&<Tag color={C.emerald}>🟢 녹색</Tag>}{vidEnv.hasYellow&&<Tag color={C.amber}>🟡 황색</Tag>}</div>
+          </div>}
+
+          {r.similar?.length>0&&<div style={{background:C.card,border:`1px solid ${C.violet}10`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🧠 유사 판례 {r.similar.length}건</div>
+            {r.similar.map(c=><div key={c.id} style={{padding:8,borderRadius:8,background:"rgba(6,9,16,.3)",marginBottom:3,fontSize:11}}>
+              <span style={{color:C.blue}}>{c.faultA}%</span>:<span style={{color:C.red}}>{c.faultB}%</span> · {c.accidentType} {c.caseNumber&&<span style={{color:C.t3}}>({c.caseNumber})</span>}
+            </div>)}
+          </div>}
+
+          {r.appliedMods?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🔧 수정요소</div>
+            {r.appliedMods.map((m,i)=><div key={i} style={{padding:"4px 8px",borderRadius:7,marginBottom:2,background:m.applied?`${C.blue}06`:"rgba(15,23,42,.3)",fontSize:11}}>
+              {m.applied?"✅":"⬜"} {m.n} <span style={{fontFamily:"var(--mono)",color:m.v>0?"#f87171":"#60a5fa"}}>{m.v>0?"+":""}{m.v}%</span>
+            </div>)}
+          </div>}
+
+          {r.laws?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>📖 관련 법규</div>
+            {r.laws.map((l,i)=><div key={i} style={{padding:"5px 8px",borderRadius:7,background:"rgba(6,9,16,.3)",marginBottom:2,borderLeft:`3px solid ${C.indigo}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#a5b4fc"}}>{l.a}</div>
+              <div style={{fontSize:10,color:C.t2}}>{l.d}</div>
+            </div>)}
+          </div>}
+
+          <div style={{textAlign:"center",marginBottom:14}}>
+            <button onClick={()=>setShowReport(true)} style={{padding:"12px 32px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#1e3a6e,#3b5998,#6366f1)",color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:"0 4px 20px rgba(59,89,152,.4)",letterSpacing:1}}>
+              📄 AI 감정서 작성
+            </button>
+            <p style={{fontSize:10,color:C.t3,marginTop:6}}>전문 감정서 형식으로 출력 · 인쇄/PDF 저장 가능</p>
+          </div>
+
+          <div style={{padding:10,borderRadius:10,background:`${C.amber}04`,border:`1px solid ${C.amber}08`,textAlign:"center"}}>
+            <p style={{fontSize:9.5,color:C.t3}}>⚠️ 참고용 · 법적 구속력 없음 · 정확한 판단은 보험사·전문가 문의</p>
+          </div>
+        </div>})()}
+
+        {showReport&&result&&!result.error&&<AIReport r={result} pdfText={pdfText} ocrResult={ocrResult} vidEnv={vidEnv} onClose={()=>setShowReport(false)}/>}
+      </div>
+    </div>;
+  }
+
+  // ═══ INPUT PAGE ═══
+  return<div style={{minHeight:"100vh",background:C.bg,color:C.t1,fontFamily:"var(--sans)"}}>
+    <div style={{padding:"10px 16px",background:"rgba(6,9,16,.9)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,zIndex:50}}>
+      <div style={{...mx,display:"flex",alignItems:"center",gap:8,padding:0}}>
+        <div style={{width:30,height:30,borderRadius:9,background:`linear-gradient(135deg,${C.blue},${C.violet})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>⚖️</div>
+        <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13}}>MD Labs <span style={{fontSize:9,color:C.indigo}}>AI</span></div><div style={{fontSize:8.5,color:C.t3}}>과실비율 분석 v7.0</div></div>
+        <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>DB {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</span>
+        {stats.total>0&&<button onClick={()=>setShowKB(!showKB)} style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${showKB?`${C.violet}30`:C.b1}`,background:showKB?`${C.violet}08`:"transparent",color:showKB?C.violet:C.t3,fontSize:10,fontWeight:600,cursor:"pointer"}}>🧠 {stats.total}</button>}
+      </div>
+    </div>
+    <div style={{...mx,paddingTop:14,paddingBottom:80}}>
+      <div style={{textAlign:"center",marginBottom:18}}>
+        <h1 style={{fontSize:"clamp(20px,5vw,30px)",fontWeight:900,lineHeight:1.3,marginBottom:4}}>
+          교통사고 <span style={{background:`linear-gradient(135deg,${C.blue},${C.violet})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>과실비율</span> 분석
+        </h1>
+        <p style={{fontSize:12,color:C.t2}}>사고 상황 입력 → AI 분석 → 과실비율 즉시 확인</p>
+      </div>
+
+      {running&&<AgentPipeline stepStates={stepStates}/>}
+
+      {showKB&&<div style={{background:C.card,border:`1px solid ${C.violet}10`,borderRadius:14,padding:14,marginBottom:12,animation:"fadeUp .2s"}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontSize:11,fontWeight:700,color:C.t3}}>🧠 학습 DB ({kb.length}건)</span>
+          {kb.length>0&&<Btn small onClick={()=>{if(confirm('전체 삭제?')){setKb([]);saveKB([])}}} sx={{color:C.red,fontSize:9}}>전체삭제</Btn>}
+        </div>
+        <textarea id="kb-input" placeholder="판례문 붙여넣기 → 파싱 저장" style={{width:"100%",padding:8,borderRadius:8,border:`1px solid ${C.b1}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,resize:"vertical",minHeight:50,outline:"none"}}/>
+        <Btn small primary onClick={()=>{const el=document.getElementById('kb-input');if(el?.value?.length>=20){addToKB(parsePrecedent(el.value));el.value=''}}} sx={{marginTop:4}}>파싱 & 저장</Btn>
+        {kb.slice(0,6).map(c=><div key={c.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 6px",borderRadius:6,background:"rgba(6,9,16,.3)",marginTop:3,fontSize:10}}>
+          <span>{c.accidentType} <span style={{color:C.blue}}>{c.faultA}</span>:<span style={{color:C.red}}>{c.faultB}</span> {c.caseNumber||''}</span>
+          <button onClick={()=>removeFromKB(c.id)} style={{background:"none",border:"none",color:C.t3,cursor:"pointer",fontSize:10}}>✕</button>
+        </div>)}
+      </div>}
+
+      <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:18,padding:18,marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:10}}><span style={{fontSize:14}}>📝</span><span style={{fontSize:12,fontWeight:700}}>사고 상황 입력</span></div>
+        <textarea ref={taRef} value={input} onChange={e=>setInput(e.target.value)}
+          placeholder={"사고 상황을 구체적으로 설명해주세요.\n\n예: 편도 2차로에서 1차로 직진 중 2차로 차량이\n깜빡이 없이 차선변경하여 측면 충돌"}
+          style={{width:"100%",padding:12,borderRadius:12,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:13,outline:"none",resize:"vertical",minHeight:90,lineHeight:1.7}}/>
+        <div style={{fontSize:9.5,color:C.t3,marginTop:4}}>{input.length}자{input.length>=5&&<span style={{color:C.emerald}}> ✓</span>}</div>
+      </div>
+
+      <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:18,padding:18,marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:10}}><span style={{fontSize:14}}>📎</span><span style={{fontSize:12,fontWeight:700}}>파일 첨부</span><span style={{fontSize:10,color:C.t3}}>(선택)</span></div>
+        <label style={{display:"flex",flexDirection:"column",alignItems:"center",padding:18,borderRadius:12,border:`2px dashed ${C.b2}`,background:"rgba(6,9,16,.3)",cursor:"pointer"}}
+          onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drop-active')}}
+          onDragLeave={e=>e.currentTarget.classList.remove('drop-active')}
+          onDrop={e=>{e.preventDefault();e.currentTarget.classList.remove('drop-active');addFiles(e.dataTransfer.files)}}>
+          <input type="file" multiple accept="image/*,video/*,.txt,.pdf,application/pdf" onChange={e=>{if(e.target.files?.length)addFiles(e.target.files)}} style={{display:"none"}}/>
+          <div style={{fontSize:20,marginBottom:3}}>📤</div>
+          <div style={{fontSize:11,fontWeight:600}}>클릭 또는 드래그</div>
+          <div style={{fontSize:9.5,color:C.t3,marginTop:2}}>📄 PDF(EDR보고서) · 🖼️ 이미지 · 🎬 영상 (최대 50MB)</div>
+        </label>
+        {files.length>0&&<div style={{marginTop:8}}>{files.map(f=><div key={f.id} style={{display:"flex",gap:8,padding:6,borderRadius:8,background:"rgba(6,9,16,.3)",border:`1px solid ${f.pdf?`${C.cyan}15`:C.b1}`,marginBottom:3}}>
+          <div style={{width:36,height:36,borderRadius:7,overflow:"hidden",background:"rgba(15,23,42,.4)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:14}}>
+            {f.preview?<img src={f.preview} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:f.pdf?"📄":f.type?.startsWith('video/')?"🎬":"📁"}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:10.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+            <div style={{fontSize:9.5,color:f.pdf?C.cyan:C.t3}}>{(f.size/1024/1024).toFixed(1)}MB · {f.pdf?"📄 PDF":f.type?.startsWith('image/')?"🔍 OCR":f.type?.startsWith('video/')?"🎬 영상":"📁 파일"}</div>
+          </div>
+          <button onClick={()=>{setFiles(p=>p.filter(x=>x.id!==f.id));if(f.type?.startsWith('video/')){setVidSrc(null);setVidFrames([]);setVidEnv(null)}}} style={{background:"none",border:"none",color:C.t3,cursor:"pointer",fontSize:12,padding:"2px"}}>✕</button>
+        </div>)}</div>}
+        {vidSrc&&<div style={{marginTop:8}}>
+          <video ref={vidRef} src={vidSrc} controls playsInline preload="metadata" style={{width:"100%",maxHeight:180,borderRadius:8,background:"#000"}}/>
+          <div style={{padding:"6px 8px",borderRadius:7,background:`${C.amber}05`,border:`1px solid ${C.amber}10`,marginTop:4,fontSize:10,color:"#fcd34d"}}>💡 영상에서 환경정보를 추출합니다. <b>텍스트도 함께 입력</b>하면 정확도가 높아집니다.</div>
+        </div>}
+      </div>
+
+      <button onClick={runAnalysis} disabled={running||(!input.trim()&&files.length===0&&!vidSrc)}
+        style={{width:"100%",padding:"14px 20px",borderRadius:14,border:"none",
+          background:running?"rgba(99,102,241,.12)":(input.trim()||files.length>0||vidSrc)?`linear-gradient(135deg,${C.blue},${C.violet})`:"#1e293b",
+          color:running?"#818cf8":(input.trim()||files.length>0||vidSrc)?"#fff":"#475569",
+          fontSize:15,fontWeight:800,cursor:running?"wait":"pointer",transition:"all .3s",marginBottom:18,
+          animation:running?"pulse 1.5s infinite":"none"}}>
+        {running?"🔄 AI 에이전트 분석 중...":"⚖️ 과실비율 분석 시작"}
+      </button>
+
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:6}}>📌 예시 (클릭)</div>
+        {examples.map((ex,i)=><button key={i} onClick={()=>{setInput(ex);taRef.current?.focus()}}
+          style={{display:"block",width:"100%",textAlign:"left",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.b1}`,background:"rgba(12,17,30,.4)",color:C.t2,fontSize:11,cursor:"pointer",lineHeight:1.5,marginBottom:3}}>
+          <span style={{color:C.indigo,fontWeight:700,marginRight:5}}>0{i+1}</span>{ex}
+        </button>)}
+      </div>
+
+      <div style={{textAlign:"center",padding:"10px 0"}}>
+        <p style={{fontSize:9,color:C.t3}}>MD Labs AI v7.0 · 손보협회 과실비율 인정기준 기반 · {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</p>
+      </div>
+    </div>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
