@@ -611,6 +611,25 @@ return<div style={{margin:"12px 0"}}><div style={{display:"flex",justifyContent:
 /* ╔══════════════════════════════════════════════════════════════╗
    ║  LAYER 5 — MAIN APP                                         ║
    ╚══════════════════════════════════════════════════════════════╝ */
+/* ═══ 서버 API 연동 ═══ */
+const API_BASE=window.location.origin;
+const SESSION_ID=(()=>{let s=sessionStorage.getItem('mdl_sid');if(!s){s='s-'+Date.now()+'-'+Math.random().toString(36).slice(2,8);sessionStorage.setItem('mdl_sid',s)}return s})();
+
+async function saveToServer(data){
+  try{
+    const res=await fetch(API_BASE+'/api/save',{method:'POST',headers:{'Content-Type':'application/json','X-Session-ID':SESSION_ID},body:JSON.stringify({...data,session_id:SESSION_ID})});
+    if(!res.ok)return null;
+    return await res.json();
+  }catch(e){console.warn('서버 저장 실패:',e);return null}
+}
+async function sendFeedback(analysisId,isCorrect,comment){
+  try{
+    const res=await fetch(API_BASE+'/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({analysis_id:analysisId,is_correct:isCorrect,comment:comment||''})});
+    if(!res.ok)return null;
+    return await res.json();
+  }catch(e){console.warn('피드백 저장 실패:',e);return null}
+}
+
 function App(){
   const[kb,setKb]=useState(()=>loadKB());
   const[input,setInput]=useState("");
@@ -628,6 +647,8 @@ function App(){
   const[showReport,setShowReport]=useState(false);
   const taRef=useRef(null);
   const[stepStates,setStepStates]=useState({});
+  const[savedId,setSavedId]=useState(null);
+  const[fbSent,setFbSent]=useState(false);
   const setStep=(id,status,progress,msg)=>setStepStates(p=>({...p,[id]:{status,progress:progress??p[id]?.progress,msg:msg??p[id]?.msg}}));
   const resetSteps=()=>setStepStates({});
   const mx={maxWidth:900,margin:"0 auto",padding:"0 16px"};
@@ -776,6 +797,19 @@ function App(){
       laws:getLaws(m.match,combined),similar:sim,text:combined};
     resultObj.analysis=generateAnalysis(resultObj,safeInput);
     setResult(resultObj);
+    setSavedId(null);setFbSent(false);
+    // ═══ 서버 자동 저장 ═══
+    saveToServer({
+      input_text:safeInput,input_type:hasPDF?'pdf':hasImage?'ocr':hasVideo?'video':'text',
+      has_pdf:hasPDF,has_image:hasImage,has_video:hasVideo,
+      pdf_text:pdfText,ocr_text:ocrResult?.text||'',video_env:vidEnv,
+      diagram_id:m.match.id,diagram_title:m.match.t,category:m.match.cat,subcategory:m.match.sub,
+      confidence:m.confidence,match_score:m.matchScore,alt_diagrams:m.alts,
+      fault_a:fA,fault_b:fB,label_a:resultObj.labelA,label_b:resultObj.labelB,
+      base_fault_a:isPed?m.match.bf.c:m.match.bf.a,base_fault_b:isPed?m.match.bf.p:m.match.bf.b,
+      detected_mods:mods,applied_mods:resultObj.appliedMods,laws:resultObj.laws.map(l=>({a:l.a,d:l.d})),
+      analysis_text:resultObj.analysis,llm_used:false
+    }).then(res=>{if(res?.id)setSavedId(res.id)}).catch(()=>{});
     setStep("result","done",100,`${m.match.id} · ${fA}:${fB}`);
     setRunning(false);setPage("result");
   },[input,files,vidSrc,kb,running]);
@@ -988,7 +1022,7 @@ function App(){
       <div style={{padding:"10px 16px",background:"rgba(6,9,16,.9)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,zIndex:50}}>
         <div style={{...mx,display:"flex",alignItems:"center",justifyContent:"space-between",padding:0}}>
           <button onClick={()=>{setPage("input");resetSteps();setShowReport(false)}} style={{background:"none",border:"none",color:C.t2,cursor:"pointer",fontSize:16,padding:"4px 6px"}}>← 돌아가기</button>
-          <Btn small primary onClick={()=>{setInput("");setResult(null);setFiles([]);setVidSrc(null);setVidEnv(null);setVidFrames([]);setOcrResult(null);setPdfText("");resetSteps();setShowReport(false);setPage("input")}}>🔄 새 분석</Btn>
+          <Btn small primary onClick={()=>{setInput("");setResult(null);setFiles([]);setVidSrc(null);setVidEnv(null);setVidFrames([]);setOcrResult(null);setPdfText("");resetSteps();setShowReport(false);setSavedId(null);setFbSent(false);setPage("input")}}>🔄 새 분석</Btn>
           {result&&!result.error&&<button onClick={()=>setShowReport(true)} style={{padding:"5px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2c5aa0,#6366f1)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",marginLeft:6}}>📄 AI 감정서</button>}
         </div>
       </div>
@@ -1086,6 +1120,21 @@ function App(){
             </button>
             <p style={{fontSize:10,color:C.t3,marginTop:6}}>전문 감정서 형식으로 출력 · 인쇄/PDF 저장 가능</p>
           </div>
+
+          {savedId&&<div style={{background:C.card,border:`1px solid ${C.emerald}15`,borderRadius:14,padding:14,marginBottom:10,textAlign:"center"}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.emerald,marginBottom:8}}>✅ 분석 결과가 서버에 저장되었습니다</div>
+            {!fbSent?<div>
+              <div style={{fontSize:10,color:C.t3,marginBottom:8}}>이 분석 결과가 정확한가요? (학습에 반영됩니다)</div>
+              <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+                <button onClick={()=>{sendFeedback(savedId,true,'정확함');setFbSent('correct')}} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"rgba(16,185,129,.12)",color:C.emerald,fontSize:12,fontWeight:700,cursor:"pointer"}}>👍 정확해요</button>
+                <button onClick={()=>{sendFeedback(savedId,false,'부정확');setFbSent('wrong')}} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"rgba(239,68,68,.08)",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>👎 틀려요</button>
+              </div>
+            </div>:
+            <div style={{fontSize:11,color:fbSent==='correct'?C.emerald:C.amber,fontWeight:600}}>
+              {fbSent==='correct'?'✅ 감사합니다! 정확도 향상에 반영됩니다.':'📝 피드백 감사합니다. 개선에 활용하겠습니다.'}
+            </div>}
+          </div>}
+          {!savedId&&<div style={{textAlign:"center",marginBottom:10}}><span style={{fontSize:9,color:C.t3}}>💾 서버 저장 중...</span></div>}
 
           <div style={{padding:10,borderRadius:10,background:`${C.amber}04`,border:`1px solid ${C.amber}08`,textAlign:"center"}}>
             <p style={{fontSize:9.5,color:C.t3}}>⚠️ 참고용 · 법적 구속력 없음 · 정확한 판단은 보험사·전문가 문의</p>
