@@ -1413,8 +1413,16 @@ function App(){
     setLlmResult(null);setLlmLoading(true);
     const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
     callClaudeAPI(combined,diagramListStr).then(cr=>{
-      if(cr?.success&&cr.result){setLlmResult(cr.result);setLlmLoading(false)}
-      else setLlmLoading(false);
+      if(cr?.success&&cr.result){setLlmResult(cr.result);setLlmLoading(false);
+        // ═══ Claude 분석 결과 DB 업데이트 (학습 데이터) ═══
+        const llmData={llm_response:cr.result,llm_used:true,llm_diagram_id:cr.result.diagram_id||null,
+          llm_fault_a:cr.result.fault_a,llm_fault_b:cr.result.fault_b,llm_confidence:cr.result.confidence||null,
+          llm_reasoning:cr.result.reasoning||'',llm_analysis:cr.result.analysis||'',
+          llm_modifiers:cr.result.detected_modifiers||[],llm_tokens:cr.tokens||0,
+          engine_diagram_id:m.match.id};
+        fetch(API_BASE+'/api/save',{method:'PATCH',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({session_id:SESSION_ID,llm_data:llmData})}).catch(()=>{});
+      } else setLlmLoading(false);
     }).catch(()=>setLlmLoading(false));
     setStep("result","done",100,`${m.match.id} · ${fA}:${fB}`);
     setRunning(false);setPage("result");
@@ -1429,7 +1437,7 @@ function App(){
   const fmtDate=`${now.getFullYear()}년 ${now.getMonth()+1}월 ${now.getDate()}일`;
   const fmtTime=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-  function AIReport({r,pdfText,ocrResult,vidEnv,onClose}){
+  function AIReport({r,pdfText,ocrResult,vidEnv,llmResult,onClose}){
     if(!r||r.error)return null;
     const d=r.diagram;const printRef=useRef(null);
 
@@ -1589,13 +1597,60 @@ function App(){
             </div>)}
           </div></div>}
 
-          {/* 8. 종합 의견 */}
-          <div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#c0392b"}}>제8장 종합 의견</div><div style={{...TS.sb,fontSize:11.5,lineHeight:2.2,color:"#333"}}>
+          {/* 8. Claude AI 보조 분석 */}
+          {llmResult&&!llmResult.error&&<div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#6366f1"}}>제8장 Claude AI 보조 분석</div><div style={TS.sb}>
+            <div style={{background:"#f0f0ff",border:"1px solid #d0d0f0",borderRadius:8,padding:12,marginBottom:10}}>
+              <div style={{fontSize:10,color:"#6366f1",fontWeight:700,marginBottom:6}}>🤖 AI 분석 엔진: Claude (Anthropic)</div>
+              {llmResult.reasoning&&<p style={{fontSize:10.5,color:"#444",lineHeight:1.9,marginBottom:8}}>
+                <b>AI 추론 과정:</b> {llmResult.reasoning}</p>}
+              {llmResult.analysis&&<p style={{fontSize:10.5,color:"#444",lineHeight:1.9,marginBottom:8}}>
+                <b>AI 분석 의견:</b> {llmResult.analysis}</p>}
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11,marginTop:8}}>
+                <thead><tr>
+                  <th style={{...TS.th,background:"#e8e8f8",width:"25%"}}>항목</th>
+                  <th style={{...TS.th,background:"#e8f0e8",width:"37%"}}>패턴매칭 엔진</th>
+                  <th style={{...TS.th,background:"#e8e8f8",width:"38%"}}>Claude AI</th>
+                </tr></thead>
+                <tbody>
+                  <tr><td style={{...TS.td,fontWeight:700}}>추천 도표</td>
+                    <td style={{...TS.td,textAlign:"center"}}>{d.id}</td>
+                    <td style={{...TS.td,textAlign:"center",color:d.id===llmResult.diagram_id?"#27ae60":"#e67e22",fontWeight:700}}>
+                      {llmResult.diagram_id||"-"} {d.id===llmResult.diagram_id?"✅ 일치":"⚠️ 상이"}</td></tr>
+                  <tr><td style={{...TS.td,fontWeight:700}}>과실비율</td>
+                    <td style={{...TS.td,textAlign:"center"}}>{r.faultA}% : {r.faultB}%</td>
+                    <td style={{...TS.td,textAlign:"center"}}>{llmResult.fault_a!==undefined?`${llmResult.fault_a}% : ${llmResult.fault_b}%`:"-"}</td></tr>
+                  <tr><td style={{...TS.td,fontWeight:700}}>신뢰도</td>
+                    <td style={{...TS.td,textAlign:"center"}}>{r.confidence||"-"}</td>
+                    <td style={{...TS.td,textAlign:"center"}}>{llmResult.confidence||"-"}</td></tr>
+                  {llmResult.detected_modifiers?.length>0&&<tr><td style={{...TS.td,fontWeight:700}}>AI 감지 수정요소</td>
+                    <td colSpan={2} style={TS.td}>{llmResult.detected_modifiers.join(", ")}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            {d.id!==llmResult.diagram_id&&llmResult.diagram_id&&<div style={{padding:8,background:"#fff8e1",border:"1px solid #ffe082",borderRadius:6,fontSize:10.5,lineHeight:1.7}}>
+              <b>⚠️ 도표 불일치 안내:</b> 패턴매칭 엔진(도표 {d.id})과 Claude AI(도표 {llmResult.diagram_id})의 추천이 다릅니다.
+              사고 상황을 재검토하시거나, 전문가 확인을 권장합니다.
+            </div>}
+          </div></div>}
+
+          {/* 9. 종합 의견 */}
+          <div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#c0392b"}}>제{llmResult&&!llmResult.error?9:8}장 종합 의견</div><div style={{...TS.sb,fontSize:11.5,lineHeight:2.2,color:"#333"}}>
             <p>본 건 교통사고에 대하여 손해보험협회 「자동차사고 과실비율 인정기준(2023.6)」을 적용하여 분석한 결과,
             도표 <b>{d.id}</b>({d.t})이 가장 적합한 것으로 판단됩니다.</p>
             <p style={{marginTop:8}}>기본 과실비율({d.bf.p!==undefined?`보행자 ${d.bf.p}%`:`A ${d.bf.a||0}% : B ${d.bf.b||0}%`})에
             {r.mods?.length>0?` 수정요소(${r.mods.join(', ')})를 반영하여`:' 수정요소 없이'}
             {' '}최종 과실비율을 <b>{r.labelA} {r.faultA}% : {r.labelB} {r.faultB}%</b>로 산정합니다.</p>
+            {llmResult&&!llmResult.error&&<p style={{marginTop:8,padding:8,background:"#f0f8f0",border:"1px solid #c8e6c9",borderRadius:6}}>
+              <b>🤖 AI 종합 판단:</b> Claude AI 보조 분석 결과,
+              {d.id===llmResult.diagram_id
+                ?<> 도표 <b>{d.id}</b>이 적합하다는 점에서 <span style={{color:"#27ae60",fontWeight:700}}>패턴매칭 엔진과 일치</span>하여 분석 신뢰도가 높습니다.
+                  {llmResult.fault_a!==undefined&&Math.abs(r.faultA-llmResult.fault_a)<=5
+                    ?' 과실비율도 유사하게 산정되었습니다.'
+                    :llmResult.fault_a!==undefined?` 다만 과실비율은 AI가 ${llmResult.fault_a}:${llmResult.fault_b}으로 산정하여 일부 차이가 있으므로 참고하시기 바랍니다.`
+                    :''}</>
+                :<> 도표 <b>{llmResult.diagram_id}</b>을 추천하여 <span style={{color:"#e67e22",fontWeight:700}}>패턴매칭 결과(도표 {d.id})와 상이</span>합니다.
+                  사고 정황의 재검토를 권장하며, 양쪽 분석 결과를 종합적으로 참고하시기 바랍니다.</>}
+            </p>}
             {vidEnv&&<p style={{marginTop:8}}>영상 환경 분석 결과 사고 당시 <b>{vidEnv.timeOfDay}</b>(평균밝기 {vidEnv.avgBr})이며,
             {vidEnv.hasRed||vidEnv.hasGreen?" 신호등이 감지되어 신호교차로 사고로 판단됩니다.":" 신호등 감지가 명확하지 않아 추가 확인이 필요합니다."}</p>}
             <p style={{marginTop:12,fontWeight:700,color:"#c0392b"}}>본 감정서는 AI 분석에 기반한 참고자료이며, 법적 구속력이 없습니다.
@@ -1766,7 +1821,7 @@ function App(){
           </div>
         </div>})()}
 
-        {showReport&&result&&!result.error&&<AIReport r={result} pdfText={pdfText} ocrResult={ocrResult} vidEnv={vidEnv} onClose={()=>setShowReport(false)}/>}
+        {showReport&&result&&!result.error&&<AIReport r={result} pdfText={pdfText} ocrResult={ocrResult} vidEnv={vidEnv} llmResult={llmResult} onClose={()=>setShowReport(false)}/>}
       </div>
     </div>;
   }
