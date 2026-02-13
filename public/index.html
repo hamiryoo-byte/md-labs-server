@@ -629,6 +629,33 @@ async function sendFeedback(analysisId,isCorrect,comment){
     return await res.json();
   }catch(e){console.warn('피드백 저장 실패:',e);return null}
 }
+async function savePrecedentToServer(entry,diagramId,category){
+  try{
+    const res=await fetch(API_BASE+'/api/precedents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      case_number:entry.caseNumber||'',court:entry.court||'',date:entry.date||null,
+      category:category||entry.accidentType||'차대차',subcategory:'',diagram_id:diagramId||null,
+      fault_a:entry.faultA,fault_b:entry.faultB,keywords:entry.keywords||[],
+      legal_basis:entry.legalBasis||[],key_facts:entry.keyFacts||[],
+      summary:(entry.summary||entry.rawText||'').slice(0,5000),source:'user',confidence:entry.confidence||25
+    })});
+    if(!res.ok)return null;
+    return await res.json();
+  }catch(e){console.warn('판례 서버 저장 실패:',e);return null}
+}
+async function callClaudeAPI(text,diagramList){
+  try{
+    const res=await fetch(API_BASE+'/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,diagramList,mode:'match',sessionId:SESSION_ID})});
+    if(!res.ok)return null;
+    return await res.json();
+  }catch(e){console.warn('Claude API 호출 실패:',e);return null}
+}
+async function callClaudeReport(analysisData){
+  try{
+    const res=await fetch(API_BASE+'/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:analysisData.input_text||'분석',mode:'report',analysisData,sessionId:SESSION_ID})});
+    if(!res.ok)return null;
+    return await res.json();
+  }catch(e){console.warn('Claude 감정서 생성 실패:',e);return null}
+}
 
 function App(){
   const[kb,setKb]=useState(()=>loadKB());
@@ -649,11 +676,13 @@ function App(){
   const[stepStates,setStepStates]=useState({});
   const[savedId,setSavedId]=useState(null);
   const[fbSent,setFbSent]=useState(false);
+  const[llmResult,setLlmResult]=useState(null);
+  const[llmLoading,setLlmLoading]=useState(false);
   const setStep=(id,status,progress,msg)=>setStepStates(p=>({...p,[id]:{status,progress:progress??p[id]?.progress,msg:msg??p[id]?.msg}}));
   const resetSteps=()=>setStepStates({});
   const mx={maxWidth:900,margin:"0 auto",padding:"0 16px"};
   const stats=useMemo(()=>({total:kb.length,verified:kb.filter(c=>c.verified).length}),[kb]);
-  const addToKB=entry=>{const n=[entry,...kb];setKb(n);saveKB(n)};
+  const addToKB=(entry,diagramId,category)=>{const n=[entry,...kb];setKb(n);saveKB(n);savePrecedentToServer(entry,diagramId,category).catch(()=>{})};
   const removeFromKB=id=>{const n=kb.filter(c=>c.id!==id);setKb(n);saveKB(n)};
 
   function checkPDF(f){
@@ -810,6 +839,13 @@ function App(){
       detected_mods:mods,applied_mods:resultObj.appliedMods,laws:resultObj.laws.map(l=>({a:l.a,d:l.d})),
       analysis_text:resultObj.analysis,llm_used:false
     }).then(res=>{if(res?.id)setSavedId(res.id)}).catch(()=>{});
+    // ═══ Claude API 보조 분석 (백그라운드) ═══
+    setLlmResult(null);setLlmLoading(true);
+    const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
+    callClaudeAPI(combined,diagramListStr).then(cr=>{
+      if(cr?.success&&cr.result){setLlmResult(cr.result);setLlmLoading(false)}
+      else setLlmLoading(false);
+    }).catch(()=>setLlmLoading(false));
     setStep("result","done",100,`${m.match.id} · ${fA}:${fB}`);
     setRunning(false);setPage("result");
   },[input,files,vidSrc,kb,running]);
@@ -1022,7 +1058,7 @@ function App(){
       <div style={{padding:"10px 16px",background:"rgba(6,9,16,.9)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,zIndex:50}}>
         <div style={{...mx,display:"flex",alignItems:"center",justifyContent:"space-between",padding:0}}>
           <button onClick={()=>{setPage("input");resetSteps();setShowReport(false)}} style={{background:"none",border:"none",color:C.t2,cursor:"pointer",fontSize:16,padding:"4px 6px"}}>← 돌아가기</button>
-          <Btn small primary onClick={()=>{setInput("");setResult(null);setFiles([]);setVidSrc(null);setVidEnv(null);setVidFrames([]);setOcrResult(null);setPdfText("");resetSteps();setShowReport(false);setSavedId(null);setFbSent(false);setPage("input")}}>🔄 새 분석</Btn>
+          <Btn small primary onClick={()=>{setInput("");setResult(null);setFiles([]);setVidSrc(null);setVidEnv(null);setVidFrames([]);setOcrResult(null);setPdfText("");resetSteps();setShowReport(false);setSavedId(null);setFbSent(false);setLlmResult(null);setLlmLoading(false);setPage("input")}}>🔄 새 분석</Btn>
           {result&&!result.error&&<button onClick={()=>setShowReport(true)} style={{padding:"5px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2c5aa0,#6366f1)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",marginLeft:6}}>📄 AI 감정서</button>}
         </div>
       </div>
@@ -1079,7 +1115,7 @@ function App(){
           {pdfText&&<div style={{background:C.card,border:`1px solid ${C.cyan}10`,borderRadius:14,padding:14,marginBottom:10}}>
             <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}><span>📄</span><span style={{fontSize:11,fontWeight:700,color:C.t3}}>PDF 추출 텍스트</span></div>
             <pre style={{padding:8,borderRadius:8,background:"rgba(6,9,16,.5)",fontSize:10,color:C.t2,lineHeight:1.5,whiteSpace:"pre-wrap",fontFamily:"var(--mono)",maxHeight:150,overflowY:"auto"}}>{pdfText.slice(0,3000)}</pre>
-            <Btn small onClick={()=>{addToKB(parsePrecedent(pdfText))}} sx={{marginTop:6,fontSize:10}}>🧠 학습DB 저장</Btn>
+            <Btn small onClick={()=>{addToKB(parsePrecedent(pdfText),r?.diagram?.id,r?.diagram?.cat)}} sx={{marginTop:6,fontSize:10}}>🧠 학습DB 저장</Btn>
           </div>}
 
           {ocrResult?.text&&<div style={{background:C.card,border:`1px solid ${C.cyan}10`,borderRadius:14,padding:14,marginBottom:10}}>
@@ -1120,6 +1156,25 @@ function App(){
             </button>
             <p style={{fontSize:10,color:C.t3,marginTop:6}}>전문 감정서 형식으로 출력 · 인쇄/PDF 저장 가능</p>
           </div>
+
+          {(llmLoading||llmResult)&&<div style={{background:C.card,border:`1px solid ${C.violet}15`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <span>🤖</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.violet}}>Claude AI 보조 분석</span>
+              {llmLoading&&<span style={{fontSize:9,color:C.t3,animation:"pulse 1.5s infinite"}}>분석 중...</span>}
+            </div>
+            {llmResult&&<div>
+              {llmResult.reasoning&&<p style={{fontSize:11,color:C.t2,lineHeight:1.7,marginBottom:8}}>{llmResult.reasoning}</p>}
+              {llmResult.analysis&&<p style={{fontSize:11,color:C.t2,lineHeight:1.7,marginBottom:8}}>{llmResult.analysis}</p>}
+              {llmResult.diagram_id&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
+                <Tag color={C.violet}>AI추천: {llmResult.diagram_id}</Tag>
+                {llmResult.fault_a!==undefined&&<Tag color={C.cyan}>AI과실: {llmResult.fault_a}:{llmResult.fault_b}</Tag>}
+                {llmResult.confidence&&<Tag color={C.amber}>신뢰도: {llmResult.confidence}</Tag>}
+              </div>}
+              {llmResult.detected_modifiers?.length>0&&<div style={{fontSize:10,color:C.t3,marginTop:4}}>수정요소: {llmResult.detected_modifiers.join(', ')}</div>}
+              {llmResult.error&&<p style={{fontSize:10,color:C.amber}}>{llmResult.raw||'AI 분석 결과 파싱 실패'}</p>}
+            </div>}
+          </div>}
 
           {savedId&&<div style={{background:C.card,border:`1px solid ${C.emerald}15`,borderRadius:14,padding:14,marginBottom:10,textAlign:"center"}}>
             <div style={{fontSize:11,fontWeight:700,color:C.emerald,marginBottom:8}}>✅ 분석 결과가 서버에 저장되었습니다</div>
