@@ -1,6 +1,6 @@
 {
   "name": "md-labs-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MD Labs 과실비율 분석 서버 — Supabase + Claude API",
   "private": true,
   "scripts": {
