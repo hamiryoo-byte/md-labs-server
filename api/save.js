@@ -3,6 +3,69 @@ const crypto = require('crypto');
 
 module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // ═══ PATCH: Claude AI 분석 결과 업데이트 ═══
+  if (req.method === 'PATCH') {
+    try {
+      const { session_id, llm_data } = req.body;
+      if (!session_id || !llm_data) {
+        return res.status(400).json({ error: 'session_id, llm_data 필수' });
+      }
+
+      // 해당 세션의 최신 분석 레코드 찾아서 업데이트
+      const { data: latest, error: findErr } = await supabase
+        .from('analyses')
+        .select('id')
+        .eq('session_id', session_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (findErr || !latest) {
+        return res.status(404).json({ error: '해당 세션의 분석 데이터 없음' });
+      }
+
+      const updateRecord = {
+        llm_used: true,
+        llm_response: llm_data.llm_response || null,
+      };
+
+      const { error: updateErr } = await supabase
+        .from('analyses')
+        .update(updateRecord)
+        .eq('id', latest.id);
+
+      if (updateErr) throw updateErr;
+
+      // ═══ llm_analyses 테이블에 별도 저장 (학습 데이터) ═══
+      const llmRecord = {
+        analysis_id:     latest.id,
+        session_id:      session_id,
+        llm_diagram_id:  llm_data.llm_diagram_id || null,
+        llm_fault_a:     llm_data.llm_fault_a ?? null,
+        llm_fault_b:     llm_data.llm_fault_b ?? null,
+        llm_confidence:  llm_data.llm_confidence || null,
+        llm_reasoning:   (llm_data.llm_reasoning || '').slice(0, 5000),
+        llm_analysis:    (llm_data.llm_analysis || '').slice(0, 5000),
+        llm_modifiers:   llm_data.llm_modifiers || [],
+        llm_tokens:      llm_data.llm_tokens || 0,
+        matches_engine:  llm_data.llm_diagram_id === llm_data.engine_diagram_id,
+      };
+
+      await supabase.from('llm_analyses').insert(llmRecord).catch(() => {});
+
+      return res.status(200).json({
+        success: true,
+        id: latest.id,
+        message: 'Claude AI 분석 결과 저장 완료'
+      });
+
+    } catch (err) {
+      console.error('PATCH Save API error:', err);
+      return res.status(500).json({ error: 'LLM 결과 저장 오류' });
+    }
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
