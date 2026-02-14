@@ -1103,6 +1103,25 @@ function analyzeEnv(du){return new Promise(ok=>{
 const GPU_MODES={local:'http://localhost:8090',cloud:localStorage.getItem('atlas_gpu_cloud_url')||'',ngrok:localStorage.getItem('atlas_gpu_ngrok_url')||''};
 const GPU_MODE=localStorage.getItem('atlas_gpu_mode')||'local';
 const GPU_SERVER_URL=(GPU_MODE==='cloud'?GPU_MODES.cloud:GPU_MODE==='ngrok'?GPU_MODES.ngrok:GPU_MODES.local)||'http://localhost:8090';
+
+/* ── Supabase 판례 검색 (ATLAS Pro) ── */
+async function searchPrecedentsDB(text,accidentType,max=5){
+  try{
+    const kw=[];
+    ['차선변경','추돌','횡단보도','과속','음주','안전거리','급제동','비보호좌회전','우회전','유턴','역주행','보행자','자전거','교차로','주차장','야간','후진','중앙선침범','직진','좌회전','합류','신호위반','적색','녹색'].forEach(k=>{if(text.includes(k))kw.push(k)});
+    if(kw.length===0)return[];
+    let catFilter='';
+    if(accidentType==='차대사람')catFilter='보행자_사고';
+    else if(accidentType==='차대자전거')catFilter='이륜차_PM';
+    else catFilter='교차로_사고';
+    const r=await fetch(`/api/precedents`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({keywords:kw.slice(0,5).join(','),categories:catFilter,limit:max}),
+      signal:AbortSignal.timeout(8000)});
+    if(!r.ok)return[];
+    const data=await r.json();
+    return(data.results||[]).map(d=>({...d,matchScore:kw.filter(k=>(d.keywords||'').includes(k)).length*15+(d.fault_ratio?20:0),source:'supabase'}));
+  }catch(e){console.warn('판례DB:',e.message);return[]}
+}
 async function callGPUServer(file,type='video'){
   try{
     const fd=new FormData();fd.append('file',file);
@@ -1442,11 +1461,15 @@ function App(){
     setStep("match","done",100,`${m.match.id} · ${m.match.t} (점수:${m.matchScore})`);
     await new Promise(r=>setTimeout(r,200));
 
-    // Step 6: Similar
-    setStep("similar","running",50,"유사 판례 검색...");
-    await new Promise(r=>setTimeout(r,300));
+    // Step 6: Similar (로컬 KB + Supabase 69,370건)
+    setStep("similar","running",30,"유사 판례 검색...");
+    await new Promise(r=>setTimeout(r,200));
     const sim=findSimilar(combined,kb);
-    setStep("similar","done",100,sim.length?`${sim.length}건`:"없음");
+    setStep("similar","running",60,"Supabase 판례 DB 검색...");
+    const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
+    const dbResults=await searchPrecedentsDB(combined,accType,10);
+    const allSimilar=[...sim,...dbResults.filter(d=>!sim.some(s=>s.id===d.id))].sort((a,b)=>(b.matchScore||0)-(a.matchScore||0)).slice(0,10);
+    setStep("similar","done",100,allSimilar.length?`${allSimilar.length}건 (로컬${sim.length}+DB${dbResults.length})`:"없음");
     await new Promise(r=>setTimeout(r,150));
 
     // Step 7: Result
@@ -1458,7 +1481,7 @@ function App(){
     const resultObj={diagram:m.match,confidence:m.confidence,matchScore:m.matchScore,alts:m.alts,faultA:fA,faultB:fB,
       labelA:m.match.la||(isPed?"차량":"A"),labelB:m.match.lb||(isPed?"보행자":"B"),
       mods,appliedMods:(m.match.mods||[]).map(mod=>({...mod,applied:mods.some(dm=>mod.n.includes(dm)||dm.includes(mod.n))})),
-      laws:getLaws(m.match,combined),similar:sim,text:combined};
+      laws:getLaws(m.match,combined),similar:allSimilar,dbPrecedents:dbResults,text:combined};
     resultObj.analysis=generateAnalysis(resultObj,safeInput);
     setResult(resultObj);
     setSavedId(null);setFbSent(false);
@@ -1478,7 +1501,9 @@ function App(){
     // ═══ Claude API 보조 분석 (백그라운드) ═══
     setLlmResult(null);setLlmLoading(true);
     const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
-    const claudeInput=gpuResult?.for_claude?(combined+"\n\n"+gpuResult.for_claude):combined;
+    let claudeInput=combined;
+    if(gpuResult?.for_claude)claudeInput+="\n\n"+gpuResult.for_claude;
+    if(dbResults.length>0)claudeInput+="\n\n## 유사 판례 DB 검색 결과\n"+dbResults.slice(0,5).map(d=>`- ${d.case_number||''} (${d.court||''}) 과실${d.fault_ratio||'?'} ${d.categories||''} ${(d.summary||'').slice(0,100)}`).join('\n');
     callClaudeAPI(claudeInput,diagramListStr).then(cr=>{
       if(cr?.success&&cr.result){setLlmResult(cr.result);setLlmLoading(false);
         // ═══ Claude 분석 결과 DB 업데이트 (학습 데이터) ═══
@@ -1672,10 +1697,11 @@ function App(){
           </div></div>}
 
           {/* 7. 유사 판례 */}
-          {r.similar?.length>0&&<div style={TS.sec}><div style={TS.st}>제7장 유사 판례 분석</div><div style={TS.sb}>
-            {r.similar.map(c=><div key={c.id} style={{padding:8,border:"1px solid #e8e8f0",borderRadius:6,marginBottom:6,background:"#fafafa"}}>
-              <div style={{fontSize:11,fontWeight:700}}>{c.accidentType} — {c.caseNumber||"판례번호 미상"}</div>
-              <div style={{fontSize:10.5,color:"#666"}}>과실비율: {c.faultA}% : {c.faultB}% {c.court&&`| ${c.court}`}</div>
+          {r.similar?.length>0&&<div style={TS.sec}><div style={TS.st}>제7장 유사 판례 분석 {r.dbPrecedents?.length>0&&`(DB ${r.dbPrecedents.length}건 포함)`}</div><div style={TS.sb}>
+            {r.similar.map(c=><div key={c.id} style={{padding:8,border:"1px solid #e8e8f0",borderRadius:6,marginBottom:6,background:c.source==='supabase'?"#f0fff0":"#fafafa"}}>
+              <div style={{fontSize:11,fontWeight:700}}>{c.source==='supabase'?'📗':'📘'} {c.case_name||c.accidentType||''} — {c.case_number||c.caseNumber||"판례번호 미상"}</div>
+              <div style={{fontSize:10.5,color:"#666"}}>과실비율: {c.fault_a||c.faultA||'?'}% : {c.fault_b||c.faultB||'?'}% {(c.court)||''} {c.date?`| ${c.date}`:''}</div>
+              {c.summary&&<div style={{fontSize:10,color:"#555",marginTop:3,lineHeight:1.6}}>{c.summary.slice(0,200)}</div>}
             </div>)}
           </div></div>}
 
@@ -1839,9 +1865,19 @@ function App(){
           </div>}
 
           {r.similar?.length>0&&<div style={{background:C.card,border:`1px solid ${C.violet}10`,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🧠 유사 판례 {r.similar.length}건</div>
-            {r.similar.map(c=><div key={c.id} style={{padding:8,borderRadius:8,background:"rgba(6,9,16,.3)",marginBottom:3,fontSize:11}}>
-              <span style={{color:C.blue}}>{c.faultA}%</span>:<span style={{color:C.red}}>{c.faultB}%</span> · {c.accidentType} {c.caseNumber&&<span style={{color:C.t3}}>({c.caseNumber})</span>}
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🧠 유사 판례 {r.similar.length}건 {r.dbPrecedents?.length>0&&<span style={{fontSize:9,color:C.emerald}}>(DB {r.dbPrecedents.length}건 포함)</span>}</div>
+            {r.similar.map(c=><div key={c.id} style={{padding:8,borderRadius:8,background:"rgba(6,9,16,.3)",marginBottom:4,fontSize:11}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span>{c.source==='supabase'?<Tag color={C.emerald} sx={{fontSize:8,marginRight:3}}>DB</Tag>:<Tag color={C.violet} sx={{fontSize:8,marginRight:3}}>KB</Tag>}
+                  <span style={{color:C.blue}}>{c.fault_a||c.faultA||'?'}%</span>:<span style={{color:C.red}}>{c.fault_b||c.faultB||'?'}%</span>
+                  {' · '}{c.case_name||c.accidentType||''}
+                </span>
+                <span style={{fontSize:9,color:C.t3}}>{c.matchScore}점</span>
+              </div>
+              {c.source==='supabase'&&<div style={{fontSize:10,color:C.t3,marginTop:3}}>
+                {c.case_number&&<span>{c.case_number} · </span>}{c.court&&<span>{c.court} · </span>}{c.date&&<span>{c.date}</span>}
+                {c.summary&&<div style={{marginTop:2,color:C.t2,lineHeight:1.5}}>{c.summary.slice(0,150)}</div>}
+              </div>}
             </div>)}
           </div>}
 
@@ -1918,7 +1954,7 @@ function App(){
       <div style={{...mx,display:"flex",alignItems:"center",gap:8,padding:0}}>
         <div style={{width:30,height:30,borderRadius:9,background:`linear-gradient(135deg,${C.blue},${C.violet})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>⚖️</div>
         <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13}}>MD Labs <span style={{fontSize:9,color:C.indigo}}>AI</span></div><div style={{fontSize:8.5,color:C.t3}}>과실비율 분석 ATLAS Pro</div></div>
-        <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>DB {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</span>
+        <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>DB {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규 · 69,370판례</span>
         {gpuAvail&&<span style={{fontSize:8,color:"#27ae60",padding:"2px 6px",borderRadius:4,background:"rgba(39,174,96,.1)",border:"1px solid rgba(39,174,96,.3)",marginLeft:4,cursor:"pointer"}} onClick={()=>{
           const m=prompt("GPU 모드 선택:\n\n1 = LOCAL (무료, PC 직접)\n2 = NGROK (무료, 외부 터널)\n3 = CLOUD (유료, 24시간)\n\n현재: "+gpuMode.toUpperCase()+"\nURL: "+GPU_SERVER_URL,"");
           if(m==='1'){localStorage.setItem('atlas_gpu_mode','local');localStorage.removeItem('atlas_gpu_ngrok_url');localStorage.removeItem('atlas_gpu_cloud_url');location.reload()}
