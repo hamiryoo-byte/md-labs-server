@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>MD Labs — AI 과실비율 분석 v7.0</title>
+<title>MD Labs — AI 과실비율 분석 ATLAS Pro</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -858,264 +858,7 @@ const DB=[
   patterns:[{w:["자전거","횡단도","보행자"],wt:20,req:"all"}]},
 {id:"거26",cat:"차대자전거",sub:"기타",t:"공유자전거(따릉이) vs 차량",bf:{a:60,b:40},mods:[],
   kw:["공유","자전거","따릉이","공유자전거","차량"],la:"차량",lb:"공유자전거",
-  patterns:[{w:["공유","자전거","차량"],wt:20,req:"all"},{w:["따릉이","충돌"],wt:20,req:"all"}]},
-// ══════════════════════════════════════════════════════════════════
-//  PART 19: 차대차 — 유턴/회전교차로 추가     도표 127~140
-// ══════════════════════════════════════════════════════════════════
-{id:"127",cat:"차대차",sub:"교차로",t:"유턴차 vs 직진차 (허용구역)",bf:{a:80,b:20},
-  mods:[{n:"과속",v:10,tg:"b"},{n:"현저한 과실",v:10,tg:"a"},{n:"비보호유턴",v:10,tg:"a"}],
-  kw:["유턴","직진","허용","교차로","회전"],la:"유턴차",lb:"직진차",
-  patterns:[{w:["유턴","직진"],wt:40,req:"all"},{w:["유턴","충돌"],wt:25,req:"all"}]},
-{id:"128",cat:"차대차",sub:"교차로",t:"유턴차 vs 좌회전차",bf:{a:60,b:40},
-  mods:[{n:"유턴신호중",v:-20,tg:"a"},{n:"비보호좌회전",v:10,tg:"b"}],
-  kw:["유턴","좌회전","교차로","신호"],la:"유턴차",lb:"좌회전차",
-  patterns:[{w:["유턴","좌회전"],wt:40,req:"all"}]},
-{id:"129",cat:"차대차",sub:"교차로",t:"유턴차 vs 우회전차",bf:{a:70,b:30},
-  mods:[{n:"유턴금지구역",v:20,tg:"a"}],
-  kw:["유턴","우회전","교차로"],la:"유턴차",lb:"우회전차",
-  patterns:[{w:["유턴","우회전"],wt:40,req:"all"}]},
-{id:"130",cat:"차대차",sub:"교차로",t:"유턴금지구역 유턴 vs 직진",bf:{a:100,b:0},
-  mods:[],
-  kw:["유턴","금지","위반","직진"],la:"유턴위반차",lb:"직진차",
-  patterns:[{w:["유턴","금지","직진"],wt:40,req:"all"},{w:["유턴","위반"],wt:30,req:"all"}]},
-{id:"131",cat:"차대차",sub:"회전교차로",t:"회전교차로 진입차 vs 회전차",bf:{a:80,b:20},
-  mods:[{n:"회전차과속",v:10,tg:"b"},{n:"진입차부주의",v:10,tg:"a"}],
-  kw:["회전교차로","로터리","진입","회전","양보"],la:"진입차",lb:"회전차",
-  patterns:[{w:["회전교차로","진입"],wt:35,req:"all"},{w:["로터리","진입"],wt:35,req:"all"}]},
-{id:"132",cat:"차대차",sub:"회전교차로",t:"회전교차로 진입차량끼리 충돌",bf:{a:50,b:50},
-  mods:[{n:"우측차우선",v:-10,tg:"a"}],
-  kw:["회전교차로","동시","진입","충돌"],la:"진입차A",lb:"진입차B",
-  patterns:[{w:["회전교차로","동시","진입"],wt:35,req:"all"}]},
-{id:"133",cat:"차대차",sub:"회전교차로",t:"회전교차로 탈출차 vs 진입차",bf:{a:30,b:70},
-  mods:[],
-  kw:["회전교차로","탈출","진입","나가는"],la:"탈출차",lb:"진입차",
-  patterns:[{w:["회전교차로","나가","진입"],wt:35,req:"all"}]},
-{id:"134",cat:"차대차",sub:"회전교차로",t:"회전교차로 2차로 진입 vs 1차로 회전",bf:{a:70,b:30},
-  mods:[],
-  kw:["회전교차로","2차로","1차로","차로변경"],la:"2차로진입",lb:"1차로회전",
-  patterns:[{w:["회전교차로","차로"],wt:30,req:"all"}]},
-{id:"135",cat:"차대차",sub:"교차로",t:"비보호좌회전 vs 직진 (녹색신호)",bf:{a:80,b:20},
-  mods:[{n:"직진차과속",v:10,tg:"b"},{n:"중대한 과실",v:20,tg:"a"}],
-  kw:["비보호","좌회전","직진","녹색"],la:"비보호좌회전",lb:"직진차",
-  patterns:[{w:["비보호","좌회전","직진"],wt:45,req:"all"},{w:["비보호","좌회전"],wt:30,req:"all"}]},
-{id:"136",cat:"차대차",sub:"교차로",t:"비보호좌회전 vs 황색직진",bf:{a:60,b:40},
-  mods:[],
-  kw:["비보호","좌회전","황색","직진"],la:"비보호좌회전",lb:"황색직진차",
-  patterns:[{w:["비보호","좌회전","황색"],wt:40,req:"all"}]},
-{id:"137",cat:"차대차",sub:"교차로",t:"좌회전신호 좌회전 vs 적색직진",bf:{a:0,b:100},
-  mods:[],
-  kw:["좌회전","신호","적색","직진","화살표"],la:"좌회전신호차",lb:"적색직진차",
-  patterns:[{w:["좌회전","신호","적색","직진"],wt:40,req:"all"}]},
-{id:"138",cat:"차대차",sub:"교차로",t:"동시 좌회전 충돌",bf:{a:50,b:50},
-  mods:[{n:"선진입",v:-10,tg:"a"},{n:"대형차",v:5,tg:"a"}],
-  kw:["좌회전","동시","마주","대향","충돌"],la:"좌회전A",lb:"좌회전B",
-  patterns:[{w:["동시","좌회전"],wt:40,req:"all"},{w:["마주","좌회전"],wt:35,req:"all"}]},
-{id:"139",cat:"차대차",sub:"교차로",t:"적색신호 좌회전 vs 녹색직진",bf:{a:100,b:0},
-  mods:[],
-  kw:["적색","좌회전","녹색","직진","신호위반"],la:"적색좌회전",lb:"녹색직진",
-  patterns:[{w:["적색","좌회전","녹색","직진"],wt:40,req:"all"}]},
-{id:"140",cat:"차대차",sub:"교차로",t:"우회전 vs 횡단보도직진차",bf:{a:70,b:30},
-  mods:[{n:"보행신호중",v:10,tg:"a"}],
-  kw:["우회전","횡단보도","직진","교차로"],la:"우회전차",lb:"직진차",
-  patterns:[{w:["우회전","횡단보도","직진"],wt:35,req:"all"}]},
-// ══════════════════════════════════════════════════════════════════
-//  PART 20: 차대차 — 긴급차량/특수상황        도표 224~232
-// ══════════════════════════════════════════════════════════════════
-{id:"224",cat:"차대차",sub:"특수",t:"긴급차량(경찰/소방) vs 일반차",bf:{a:20,b:80},
-  mods:[{n:"긴급등화미사용",v:30,tg:"a"},{n:"일반차양보위반",v:20,tg:"b"}],
-  kw:["긴급","소방","경찰","구급","사이렌","양보"],la:"긴급차량",lb:"일반차량",
-  patterns:[{w:["긴급","차량"],wt:35,req:"all"},{w:["소방차","충돌"],wt:30,req:"all"},{w:["구급차","사고"],wt:30,req:"all"}]},
-{id:"225",cat:"차대차",sub:"특수",t:"긴급차량 교차로 진입 vs 직진",bf:{a:30,b:70},
-  mods:[{n:"적색신호진입",v:-10,tg:"a"},{n:"서행미이행",v:10,tg:"a"}],
-  kw:["긴급","교차로","적색","진입","사이렌"],la:"긴급차량",lb:"직진차",
-  patterns:[{w:["긴급","교차로","진입"],wt:35,req:"all"}]},
-{id:"226",cat:"차대차",sub:"특수",t:"선행사고 정차차량 추돌",bf:{a:80,b:20},
-  mods:[{n:"비상등미점등",v:10,tg:"b"},{n:"야간",v:10,tg:"a"},{n:"삼각대미설치",v:10,tg:"b"}],
-  kw:["선행","사고","정차","추돌","2차사고","비상등"],la:"추돌차",lb:"선행사고정차",
-  patterns:[{w:["선행","사고","추돌"],wt:40,req:"all"},{w:["2차","사고"],wt:30,req:"all"},{w:["정차","추돌"],wt:25,req:"all"}]},
-{id:"227",cat:"차대차",sub:"특수",t:"도로위 낙하물 회피사고",bf:{a:30,b:70},
-  mods:[{n:"급차선변경",v:20,tg:"a"},{n:"낙하물방치",v:20,tg:"b"}],
-  kw:["낙하물","회피","급차선","도로위","장애물"],la:"회피차량",lb:"후행차량",
-  patterns:[{w:["낙하물","회피"],wt:35,req:"all"},{w:["장애물","급차선"],wt:30,req:"all"}]},
-{id:"228",cat:"차대차",sub:"특수",t:"터널 내 사고",bf:{a:50,b:50},
-  mods:[{n:"전조등미점등",v:10,tg:"a"},{n:"과속",v:10,tg:"a"},{n:"안전거리미확보",v:10,tg:"a"}],
-  kw:["터널","충돌","어두운","전조등","갱도"],la:"차량A",lb:"차량B",
-  patterns:[{w:["터널","사고"],wt:35,req:"all"},{w:["터널","충돌"],wt:35,req:"all"}]},
-{id:"229",cat:"차대차",sub:"특수",t:"결빙/폭우 도로 사고",bf:{a:50,b:50},
-  mods:[{n:"과속",v:15,tg:"a"},{n:"타이어불량",v:10,tg:"a"}],
-  kw:["결빙","빙판","폭우","미끄러","수막"],la:"차량A",lb:"차량B",
-  patterns:[{w:["결빙","사고"],wt:30,req:"all"},{w:["빙판","미끄"],wt:30,req:"all"},{w:["폭우","사고"],wt:25,req:"all"}]},
-{id:"230",cat:"차대차",sub:"특수",t:"공사구간 사고",bf:{a:40,b:60},
-  mods:[{n:"공사표지무시",v:20,tg:"a"},{n:"공사안전조치미흡",v:20,tg:"b"}],
-  kw:["공사","구간","공사중","작업","안전표지"],la:"진입차",lb:"공사구간차량",
-  patterns:[{w:["공사","구간","사고"],wt:35,req:"all"},{w:["공사중","충돌"],wt:30,req:"all"}]},
-{id:"231",cat:"차대차",sub:"특수",t:"주행중 타이어 펑크/고장 사고",bf:{a:70,b:30},
-  mods:[{n:"갓길미이동",v:10,tg:"b"},{n:"비상등미점등",v:10,tg:"b"}],
-  kw:["펑크","고장","타이어","정지","갑자기"],la:"후행차",lb:"고장정지차",
-  patterns:[{w:["고장","정지","추돌"],wt:30,req:"all"},{w:["타이어","펑크"],wt:25,req:"all"}]},
-{id:"232",cat:"차대차",sub:"특수",t:"버스전용차로 진입사고",bf:{a:80,b:20},
-  mods:[{n:"버스과속",v:10,tg:"b"}],
-  kw:["버스","전용","차로","진입","위반"],la:"전용차로진입차",lb:"버스",
-  patterns:[{w:["버스","전용","차로"],wt:35,req:"all"},{w:["버스","전용","진입"],wt:30,req:"all"}]},
-// ══════════════════════════════════════════════════════════════════
-//  PART 21: 차대차 — 동행/추돌 추가           도표 429~435
-// ══════════════════════════════════════════════════════════════════
-{id:"429",cat:"차대차",sub:"동행",t:"다중추돌 (3대이상)",bf:{a:60,b:40},
-  mods:[{n:"최초추돌",v:20,tg:"a"},{n:"안전거리미확보",v:10,tg:"a"}],
-  kw:["다중","추돌","연쇄","3대","다중충돌","꼬리물기"],la:"최후행차",lb:"중간차",
-  patterns:[{w:["다중","추돌"],wt:40,req:"all"},{w:["연쇄","추돌"],wt:40,req:"all"},{w:["꼬리","물기"],wt:30,req:"all"}]},
-{id:"430",cat:"차대차",sub:"동행",t:"끼어들기 직후 급정거 추돌",bf:{a:30,b:70},
-  mods:[{n:"안전거리미확보",v:10,tg:"a"}],
-  kw:["끼어들기","급정거","추돌","진로변경","직후"],la:"후행차",lb:"끼어든차",
-  patterns:[{w:["끼어들","급정거"],wt:40,req:"all"},{w:["끼어들","추돌"],wt:35,req:"all"}]},
-{id:"431",cat:"차대차",sub:"동행",t:"이중차선변경 (2개차선 한번에)",bf:{a:80,b:20},
-  mods:[{n:"방향지시등미사용",v:5,tg:"a"}],
-  kw:["이중","차선","변경","2개","한번에","급차선"],la:"이중변경차",lb:"직진차",
-  patterns:[{w:["이중","차선","변경"],wt:40,req:"all"},{w:["2개","차선"],wt:30,req:"all"}]},
-{id:"432",cat:"차대차",sub:"동행",t:"양쪽에서 동시 차선변경",bf:{a:50,b:50},
-  mods:[{n:"선진입",v:-10,tg:"a"},{n:"방향지시등미사용",v:5,tg:"a"}],
-  kw:["동시","차선","변경","양쪽","양측"],la:"변경차A",lb:"변경차B",
-  patterns:[{w:["동시","차선","변경"],wt:40,req:"all"},{w:["양쪽","변경"],wt:35,req:"all"}]},
-{id:"433",cat:"차대차",sub:"동행",t:"저속차 추월중 충돌",bf:{a:40,b:60},
-  mods:[{n:"추월금지구역",v:20,tg:"a"},{n:"실선구간",v:15,tg:"a"}],
-  kw:["추월","저속","충돌","추월중","앞지르기"],la:"추월차",lb:"저속차",
-  patterns:[{w:["추월","충돌"],wt:35,req:"all"},{w:["앞지르기","사고"],wt:35,req:"all"}]},
-{id:"434",cat:"차대차",sub:"동행",t:"졸음운전 추돌",bf:{a:100,b:0},
-  mods:[],
-  kw:["졸음","운전","추돌","잠","깜빡"],la:"졸음운전차",lb:"피추돌차",
-  patterns:[{w:["졸음","운전"],wt:40,req:"all"},{w:["졸음","추돌"],wt:40,req:"all"}]},
-{id:"435",cat:"차대차",sub:"동행",t:"역주행 고속도로 충돌",bf:{a:0,b:100},
-  mods:[],
-  kw:["역주행","고속도로","반대","맞은편","정면"],la:"정상주행차",lb:"역주행차",
-  patterns:[{w:["역주행","고속도로"],wt:45,req:"all"},{w:["역주행","충돌"],wt:40,req:"all"}]},
-// ══════════════════════════════════════════════════════════════════
-//  PART 22: 차대차 — 주차장/골목 추가         도표 627~634
-// ══════════════════════════════════════════════════════════════════
-{id:"627",cat:"차대차",sub:"주차장",t:"주차장 내 교차로 출합",bf:{a:50,b:50},
-  mods:[{n:"우측차우선",v:-10,tg:"a"}],
-  kw:["주차장","교차로","통로","출합"],la:"차량A",lb:"차량B",
-  patterns:[{w:["주차장","교차로"],wt:35,req:"all"},{w:["주차장","통로","충돌"],wt:30,req:"all"}]},
-{id:"628",cat:"차대차",sub:"주차장",t:"주차장 입구 진출입 충돌",bf:{a:30,b:70},
-  mods:[],
-  kw:["주차장","입구","진출","진입","나가는"],la:"진입차",lb:"진출차",
-  patterns:[{w:["주차장","입구","충돌"],wt:35,req:"all"}]},
-{id:"629",cat:"차대차",sub:"기타",t:"아파트단지 내 사고",bf:{a:50,b:50},
-  mods:[{n:"서행위반",v:10,tg:"a"},{n:"과속",v:10,tg:"a"}],
-  kw:["아파트","단지","내","주거","주택"],la:"차량A",lb:"차량B",
-  patterns:[{w:["아파트","단지","사고"],wt:35,req:"all"},{w:["아파트","충돌"],wt:25,req:"all"}]},
-{id:"630",cat:"차대차",sub:"기타",t:"골목길 마주 교행 충돌",bf:{a:50,b:50},
-  mods:[{n:"과속",v:10,tg:"a"},{n:"대형차",v:5,tg:"a"}],
-  kw:["골목","교행","좁은","마주","이면도로"],la:"차량A",lb:"차량B",
-  patterns:[{w:["골목","마주"],wt:35,req:"all"},{w:["이면도로","교행"],wt:30,req:"all"},{w:["좁은","길","마주"],wt:30,req:"all"}]},
-{id:"631",cat:"차대차",sub:"기타",t:"문열림 사고 (주정차 중)",bf:{a:10,b:90},
-  mods:[{n:"후행차과속",v:10,tg:"a"},{n:"2차로이상",v:-10,tg:"b"}],
-  kw:["문","열림","문열","정차","주차","도어"],la:"후행차",lb:"문열림차",
-  patterns:[{w:["문","열","충돌"],wt:40,req:"all"},{w:["도어","사고"],wt:35,req:"all"},{w:["문열림"],wt:35,req:"any"}]},
-{id:"632",cat:"차대차",sub:"기타",t:"불법주정차 차량 추돌",bf:{a:60,b:40},
-  mods:[{n:"야간",v:10,tg:"a"},{n:"비상등미점등",v:10,tg:"b"},{n:"주정차금지구역",v:20,tg:"b"}],
-  kw:["불법","주정차","추돌","정차","주차위반"],la:"추돌차",lb:"불법주정차",
-  patterns:[{w:["불법","주정차","추돌"],wt:40,req:"all"},{w:["불법","주차","충돌"],wt:35,req:"all"}]},
-{id:"633",cat:"차대차",sub:"기타",t:"후진 중 충돌 (도로)",bf:{a:10,b:90},
-  mods:[{n:"야간",v:5,tg:"a"}],
-  kw:["후진","도로","뒤로","백","충돌"],la:"직진차",lb:"후진차",
-  patterns:[{w:["후진","충돌"],wt:40,req:"all"},{w:["뒤로","사고"],wt:30,req:"all"}]},
-{id:"634",cat:"차대차",sub:"기타",t:"견인차/렉카 작업 중 사고",bf:{a:70,b:30},
-  mods:[{n:"안전표지미설치",v:20,tg:"b"}],
-  kw:["견인","렉카","작업","견인차","정비"],la:"후행차",lb:"견인작업차",
-  patterns:[{w:["견인","작업","사고"],wt:35,req:"all"},{w:["렉카","충돌"],wt:30,req:"all"}]},
-// ══════════════════════════════════════════════════════════════════
-//  PART 23: 차대사람 — 어린이/노인/특수       도표 보34~보42
-// ══════════════════════════════════════════════════════════════════
-{id:"보34",cat:"차대사람",sub:"보호구역",t:"어린이보호구역 사고 (스쿨존)",bf:{c:90,p:10},
-  mods:[{n:"과속",v:10,tg:"c"},{n:"신호위반",v:10,tg:"c"}],
-  kw:["스쿨존","어린이","보호구역","학교","초등"],la:"차량",lb:"어린이",
-  patterns:[{w:["스쿨존","사고"],wt:45,req:"all"},{w:["어린이","보호구역"],wt:40,req:"all"},{w:["학교","앞","사고"],wt:30,req:"all"}]},
-{id:"보35",cat:"차대사람",sub:"보호구역",t:"노인보호구역 사고 (실버존)",bf:{c:85,p:15},
-  mods:[{n:"과속",v:10,tg:"c"},{n:"야간",v:5,tg:"p"}],
-  kw:["실버존","노인","보호구역","경로","요양"],la:"차량",lb:"노인",
-  patterns:[{w:["실버존","사고"],wt:45,req:"all"},{w:["노인","보호구역"],wt:40,req:"all"}]},
-{id:"보36",cat:"차대사람",sub:"횡단보도",t:"우회전차 vs 횡단보도 보행자",bf:{c:90,p:10},
-  mods:[{n:"보행신호녹색",v:10,tg:"c"},{n:"일시정지위반",v:10,tg:"c"}],
-  kw:["우회전","횡단보도","보행자","보행신호"],la:"우회전차",lb:"보행자",
-  patterns:[{w:["우회전","횡단보도","보행자"],wt:45,req:"all"},{w:["우회전","보행자"],wt:35,req:"all"}]},
-{id:"보37",cat:"차대사람",sub:"횡단보도",t:"좌회전차 vs 횡단보도 보행자",bf:{c:95,p:5},
-  mods:[],
-  kw:["좌회전","횡단보도","보행자"],la:"좌회전차",lb:"보행자",
-  patterns:[{w:["좌회전","횡단보도","보행자"],wt:45,req:"all"}]},
-{id:"보38",cat:"차대사람",sub:"기타",t:"차도 위 작업자 충돌",bf:{c:70,p:30},
-  mods:[{n:"안전조끼미착용",v:10,tg:"p"},{n:"야간",v:10,tg:"c"}],
-  kw:["작업자","차도","공사","작업","청소"],la:"차량",lb:"작업자",
-  patterns:[{w:["작업자","차도","충돌"],wt:35,req:"all"},{w:["공사","작업자","사고"],wt:30,req:"all"}]},
-{id:"보39",cat:"차대사람",sub:"기타",t:"주차장 내 보행자 사고",bf:{c:80,p:20},
-  mods:[{n:"후진중",v:10,tg:"c"},{n:"어린이",v:10,tg:"c"}],
-  kw:["주차장","보행자","후진","주차","보행"],la:"차량",lb:"보행자",
-  patterns:[{w:["주차장","보행자"],wt:40,req:"all"},{w:["주차장","후진","보행"],wt:35,req:"all"}]},
-{id:"보40",cat:"차대사람",sub:"기타",t:"횡단보도 신호변경중 사고",bf:{c:80,p:20},
-  mods:[{n:"신호잔여시간부족",v:-10,tg:"p"}],
-  kw:["횡단보도","신호","변경","잔여","깜빡","점멸"],la:"차량",lb:"보행자",
-  patterns:[{w:["횡단보도","신호","변경"],wt:35,req:"all"},{w:["보행","신호","깜빡"],wt:30,req:"all"}]},
-{id:"보41",cat:"차대사람",sub:"기타",t:"보행자 갑자기 차도진입",bf:{c:60,p:40},
-  mods:[{n:"어린이",v:10,tg:"c"},{n:"음주보행",v:10,tg:"p"},{n:"야간",v:5,tg:"p"}],
-  kw:["갑자기","뛰어들","차도","무단","보행자"],la:"차량",lb:"보행자",
-  patterns:[{w:["갑자기","뛰어들"],wt:40,req:"all"},{w:["갑자기","차도","진입"],wt:35,req:"all"}]},
-{id:"보42",cat:"차대사람",sub:"기타",t:"배달원(라이더) vs 보행자",bf:{c:80,p:20},
-  mods:[{n:"인도주행",v:20,tg:"c"},{n:"과속",v:10,tg:"c"}],
-  kw:["배달","라이더","오토바이","보행자","이륜"],la:"배달이륜차",lb:"보행자",
-  patterns:[{w:["배달","보행자"],wt:35,req:"all"},{w:["라이더","보행자"],wt:35,req:"all"}]},
-// ══════════════════════════════════════════════════════════════════
-//  PART 24: PM(개인형이동장치)/전동킥보드     도표 M19~M25
-// ══════════════════════════════════════════════════════════════════
-{id:"M19",cat:"PM",sub:"전동킥보드",t:"전동킥보드 vs 차량 (교차로)",bf:{a:50,b:50},
-  mods:[{n:"킥보드무면허",v:10,tg:"a"},{n:"킥보드인도주행",v:10,tg:"a"},{n:"차량신호위반",v:20,tg:"b"}],
-  kw:["전동","킥보드","교차로","PM","개인형"],la:"전동킥보드",lb:"차량",
-  patterns:[{w:["전동","킥보드","교차로"],wt:40,req:"all"},{w:["킥보드","차량"],wt:30,req:"all"}]},
-{id:"M20",cat:"PM",sub:"전동킥보드",t:"전동킥보드 vs 차량 (직진로)",bf:{a:40,b:60},
-  mods:[{n:"킥보드차도주행",v:10,tg:"a"},{n:"안전장구미착용",v:5,tg:"a"}],
-  kw:["전동","킥보드","직진","차도","도로"],la:"전동킥보드",lb:"차량",
-  patterns:[{w:["전동","킥보드","직진"],wt:35,req:"all"},{w:["킥보드","도로","사고"],wt:30,req:"all"}]},
-{id:"M21",cat:"PM",sub:"전동킥보드",t:"전동킥보드 vs 보행자",bf:{a:80,b:20},
-  mods:[{n:"인도주행",v:10,tg:"a"},{n:"음주운전",v:20,tg:"a"}],
-  kw:["전동","킥보드","보행자","인도","보도"],la:"전동킥보드",lb:"보행자",
-  patterns:[{w:["전동","킥보드","보행자"],wt:45,req:"all"},{w:["킥보드","보행"],wt:35,req:"all"}]},
-{id:"M22",cat:"PM",sub:"전동킥보드",t:"전동킥보드 음주운전 사고",bf:{a:90,b:10},
-  mods:[],
-  kw:["전동","킥보드","음주","술","만취"],la:"음주킥보드",lb:"상대방",
-  patterns:[{w:["킥보드","음주"],wt:45,req:"all"},{w:["전동","킥보드","술"],wt:40,req:"all"}]},
-{id:"M23",cat:"PM",sub:"전동킥보드",t:"전동킥보드 2인탑승 사고",bf:{a:85,b:15},
-  mods:[],
-  kw:["전동","킥보드","2인","탑승","동승"],la:"2인탑승킥보드",lb:"상대방",
-  patterns:[{w:["킥보드","2인","탑승"],wt:40,req:"all"},{w:["킥보드","동승"],wt:35,req:"all"}]},
-{id:"M24",cat:"PM",sub:"전동킥보드",t:"전동킥보드 횡단보도 사고",bf:{a:60,b:40},
-  mods:[{n:"킥보드탑승횡단",v:10,tg:"a"},{n:"차량신호위반",v:20,tg:"b"}],
-  kw:["전동","킥보드","횡단보도","횡단","신호"],la:"전동킥보드",lb:"차량",
-  patterns:[{w:["킥보드","횡단보도"],wt:40,req:"all"},{w:["킥보드","횡단"],wt:35,req:"all"}]},
-{id:"M25",cat:"PM",sub:"전동휠",t:"전동휠/세그웨이 vs 차량",bf:{a:50,b:50},
-  mods:[{n:"차도주행",v:10,tg:"a"}],
-  kw:["전동휠","세그웨이","원휠","전동","이동장치"],la:"전동휠",lb:"차량",
-  patterns:[{w:["전동휠","사고"],wt:35,req:"all"},{w:["세그웨이","충돌"],wt:35,req:"all"}]},
-// ══════════════════════════════════════════════════════════════════
-//  PART 25: 차대차 — 고속도로 추가            도표 562~566
-// ══════════════════════════════════════════════════════════════════
-{id:"562",cat:"차대차",sub:"고속도로",t:"고속도로 갓길정차 추돌",bf:{a:70,b:30},
-  mods:[{n:"갓길주행",v:20,tg:"a"},{n:"비상등미점등",v:10,tg:"b"},{n:"삼각대미설치",v:10,tg:"b"}],
-  kw:["고속도로","갓길","정차","추돌","비상"],la:"추돌차",lb:"갓길정차차",
-  patterns:[{w:["고속도로","갓길","추돌"],wt:40,req:"all"},{w:["갓길","정차","충돌"],wt:35,req:"all"}]},
-{id:"563",cat:"차대차",sub:"고속도로",t:"고속도로 역주행 정면충돌",bf:{a:0,b:100},
-  mods:[],
-  kw:["고속도로","역주행","정면","충돌","반대"],la:"정상주행",lb:"역주행차",
-  patterns:[{w:["고속도로","역주행"],wt:50,req:"all"},{w:["역주행","정면"],wt:45,req:"all"}]},
-{id:"564",cat:"차대차",sub:"고속도로",t:"고속도로 요금소 부근 사고",bf:{a:50,b:50},
-  mods:[{n:"급감속",v:10,tg:"b"},{n:"안전거리미확보",v:10,tg:"a"}],
-  kw:["요금소","하이패스","톨게이트","감속","고속도로"],la:"후행차",lb:"선행차",
-  patterns:[{w:["요금소","사고"],wt:40,req:"all"},{w:["톨게이트","충돌"],wt:35,req:"all"},{w:["하이패스","사고"],wt:30,req:"all"}]},
-{id:"565",cat:"차대차",sub:"고속도로",t:"고속도로 IC/JC 합류 사고",bf:{a:30,b:70},
-  mods:[{n:"합류차과속",v:10,tg:"b"},{n:"본선차양보의무",v:10,tg:"a"}],
-  kw:["고속도로","IC","JC","합류","인터체인지","분기"],la:"본선차",lb:"합류차",
-  patterns:[{w:["고속도로","합류"],wt:35,req:"all"},{w:["IC","합류"],wt:30,req:"all"},{w:["인터체인지","사고"],wt:30,req:"all"}]},
-{id:"566",cat:"차대차",sub:"고속도로",t:"고속도로 졸음쉼터 진출입 사고",bf:{a:40,b:60},
-  mods:[{n:"급차선변경",v:15,tg:"b"}],
-  kw:["졸음쉼터","휴게소","진입","진출","고속도로"],la:"본선차",lb:"진출입차",
-  patterns:[{w:["졸음쉼터","사고"],wt:35,req:"all"},{w:["휴게소","진출","사고"],wt:30,req:"all"}]}
+  patterns:[{w:["공유","자전거","차량"],wt:20,req:"all"},{w:["따릉이","충돌"],wt:20,req:"all"}]}
 ];
 
 /* ╔══════════════════════════════════════════════════════════════╗
@@ -1356,6 +1099,21 @@ function analyzeEnv(du){return new Promise(ok=>{
   img.onerror=()=>ok({brightness:128,isNight:false,label:"오류",red:false,green:false,yellow:false,redCount:0,greenCount:0,yellowCount:0});img.src=du;
 })}
 
+/* ── GPU Server (ATLAS Pro) ── */
+const GPU_SERVER_URL=localStorage.getItem('atlas_gpu_url')||'http://localhost:8090';
+async function callGPUServer(file,type='video'){
+  try{
+    const fd=new FormData();fd.append('file',file);
+    const r=await fetch(`${GPU_SERVER_URL}/analyze/${type}`,{method:'POST',body:fd,signal:AbortSignal.timeout(60000)});
+    if(!r.ok)throw new Error(`GPU서버 ${r.status}`);
+    return await r.json();
+  }catch(e){console.warn('GPU서버:',e.message);return{success:false,error:e.message}}
+}
+async function checkGPUServer(){
+  try{const r=await fetch(`${GPU_SERVER_URL}/health`,{signal:AbortSignal.timeout(3000)});
+    return(await r.json())?.status==='ok'}catch{return false}
+}
+
 /* ── Knowledge Base ── */
 const KB_KEY='mdlabs_kb_v4';
 function loadKB(){return SEC.safeJSON(KB_KEY,[])}
@@ -1396,6 +1154,7 @@ const STEPS=[
   {id:"pdf",icon:"📄",label:"PDF 분석",desc:"PDF 텍스트 추출"},
   {id:"ocr",icon:"🔍",label:"OCR 분석",desc:"이미지→텍스트 변환"},
   {id:"video",icon:"🎬",label:"영상 환경분석",desc:"주야간·신호 추출"},
+  {id:"gpu",icon:"🖥️",label:"GPU 객체탐지",desc:"차량·보행자·신호 AI 탐지"},
   {id:"match",icon:"📋",label:"도표 매칭",desc:"과실비율 인정기준 검색"},
   {id:"similar",icon:"🧠",label:"판례 검색",desc:"유사 판례 비교"},
   {id:"result",icon:"⚖️",label:"결과 산출",desc:"과실비율+법적근거"},
@@ -1406,7 +1165,7 @@ function AgentPipeline({stepStates}){
     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
       <div style={{width:7,height:7,borderRadius:4,background:Object.values(stepStates).some(s=>s.status==='running')?"#6366f1":"#1e293b",animation:Object.values(stepStates).some(s=>s.status==='running')?"pulse 1.2s infinite":"none"}}/>
       <span style={{fontSize:10,fontWeight:700,color:"#94a3b8",letterSpacing:1}}>AI AGENT PIPELINE</span>
-      <span style={{fontSize:9,color:"#475569",marginLeft:"auto"}}>v7.0</span>
+      <span style={{fontSize:9,color:"#475569",marginLeft:"auto"}}>ATLAS Pro</span>
     </div>
     {STEPS.map((step,i)=>{const st=stepStates[step.id]||{status:'idle'};const isRun=st.status==='running',isDone=st.status==='done',isErr=st.status==='error',isSkip=st.status==='skip';
     return<div key={step.id}>
@@ -1494,6 +1253,7 @@ function App(){
   const[vidEnv,setVidEnv]=useState(null);
   const[vidFrames,setVidFrames]=useState([]);
   const vidRef=useRef(null);
+  useEffect(()=>{checkGPUServer().then(ok=>{setGpuAvail(ok);if(ok)console.log('🖥️ ATLAS Pro GPU 서버 연결됨')})},[]);
   const[result,setResult]=useState(null);
   const[running,setRunning]=useState(false);
   const[page,setPage]=useState("input");
@@ -1505,6 +1265,8 @@ function App(){
   const[fbSent,setFbSent]=useState(false);
   const[llmResult,setLlmResult]=useState(null);
   const[llmLoading,setLlmLoading]=useState(false);
+  const[gpuResult,setGpuResult]=useState(null);
+  const[gpuAvail,setGpuAvail]=useState(null);
   const setStep=(id,status,progress,msg)=>setStepStates(p=>({...p,[id]:{status,progress:progress??p[id]?.progress,msg:msg??p[id]?.msg}}));
   const resetSteps=()=>setStepStates({});
   const mx={maxWidth:900,margin:"0 auto",padding:"0 16px"};
@@ -1622,6 +1384,49 @@ function App(){
       await new Promise(r=>setTimeout(r,200));
     }else{setStep("video","skip",null,"영상 없음")}
 
+    // Step 4.5: GPU Object Detection (ATLAS Pro)
+    if(hasVideo&&gpuAvail){
+      setStep("gpu","running",10,"GPU 서버 연결...");
+      try{
+        const vidFile=files.find(f=>f.type?.startsWith('video/'));
+        if(vidFile?.file){
+          setStep("gpu","running",30,"RTX 4080 객체 탐지 중...");
+          const gr=await callGPUServer(vidFile.file,'video');
+          if(gr?.success){
+            setGpuResult(gr);
+            const s=gr.summary;
+            let gt=`\n[GPU분석: ${s.accident_type} 차량${s.vehicle_count}대`;
+            if(s.has_pedestrian)gt+=" 보행자감지";
+            if(s.has_bicycle)gt+=" 자전거감지";
+            if(s.has_signal)gt+=` 신호:${s.signal_color}`;
+            gt+=` ${s.time_of_day}]`;
+            s.detected_objects?.forEach(o=>{gt+=` ${o.class_name}`});
+            combined+=gt;
+            setStep("gpu","done",100,`${s.accident_type} · 차량${s.vehicle_count} · 신뢰도${(s.confidence_avg*100).toFixed(0)}%`);
+          }else{setStep("gpu","done",100,"GPU 분석 실패: "+(gr?.error||""))}
+        }else{setStep("gpu","skip",null,"영상 파일 없음")}
+      }catch(e){setStep("gpu","error",null,e.message)}
+      await new Promise(r=>setTimeout(r,200));
+    }else if(hasImage&&gpuAvail){
+      setStep("gpu","running",10,"이미지 객체 탐지...");
+      try{
+        const imgFile=files.find(f=>f.type?.startsWith('image/'));
+        if(imgFile?.file){
+          const gr=await callGPUServer(imgFile.file,'image');
+          if(gr?.success){
+            setGpuResult(gr);
+            const s=gr.summary;
+            let gt=`\n[GPU분석: ${s.accident_type} 차량${s.vehicle_count}대`;
+            if(s.has_pedestrian)gt+=" 보행자감지";
+            gt+=`]`;
+            combined+=gt;
+            setStep("gpu","done",100,`${s.accident_type} · 객체${s.detected_objects?.length||0}개`);
+          }else{setStep("gpu","done",100,"GPU 분석 실패")}
+        }
+      }catch(e){setStep("gpu","error",null,e.message)}
+      await new Promise(r=>setTimeout(r,200));
+    }else{setStep("gpu","skip",null,gpuAvail===false?"GPU 서버 미연결":"영상/이미지 없음")}
+
     // Step 5: Diagram match
     if(combined.length<5){setStep("match","error",null,"텍스트 부족");setRunning(false);return}
     setStep("match","running",40,`${DB.length}개 도표 대조 중...`);
@@ -1664,12 +1469,14 @@ function App(){
       fault_a:fA,fault_b:fB,label_a:resultObj.labelA,label_b:resultObj.labelB,
       base_fault_a:isPed?m.match.bf.c:m.match.bf.a,base_fault_b:isPed?m.match.bf.p:m.match.bf.b,
       detected_mods:mods,applied_mods:resultObj.appliedMods,laws:resultObj.laws.map(l=>({a:l.a,d:l.d})),
-      analysis_text:resultObj.analysis,llm_used:false
-    }).then(res=>{if(res?.id)setSavedId(res.id)}).catch(()=>{});
+      analysis_text:resultObj.analysis,llm_used:false,
+      gpu_used:!!gpuResult,gpu_result:gpuResult?.summary||null
+    }).then(res=>{if(res?.id)setSavedId(res.id);else setSavedId('local')}).catch(()=>{setSavedId('local')});
     // ═══ Claude API 보조 분석 (백그라운드) ═══
     setLlmResult(null);setLlmLoading(true);
     const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
-    callClaudeAPI(combined,diagramListStr).then(cr=>{
+    const claudeInput=gpuResult?.for_claude?(combined+"\n\n"+gpuResult.for_claude):combined;
+    callClaudeAPI(claudeInput,diagramListStr).then(cr=>{
       if(cr?.success&&cr.result){setLlmResult(cr.result);setLlmLoading(false);
         // ═══ Claude 분석 결과 DB 업데이트 (학습 데이터) ═══
         const llmData={llm_response:cr.result,llm_used:true,llm_diagram_id:cr.result.diagram_id||null,
@@ -1680,7 +1487,7 @@ function App(){
         fetch(API_BASE+'/api/save',{method:'PATCH',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({session_id:SESSION_ID,llm_data:llmData})}).catch(()=>{});
       } else setLlmLoading(false);
-    }).catch(()=>setLlmLoading(false));
+    }).catch(()=>{setLlmLoading(false);setLlmResult({error:true,raw:'API 연결 실패'})});
     setStep("result","done",100,`${m.match.id} · ${fA}:${fB}`);
     setRunning(false);setPage("result");
   },[input,files,vidSrc,kb,running]);
@@ -1740,7 +1547,7 @@ function App(){
 
           {/* HEADER */}
           <div style={TS.hdr}>
-            <div style={{fontSize:11,color:"#3b5998",fontWeight:700,letterSpacing:3,marginBottom:4}}>MD LABS AI ANALYSIS v7.0</div>
+            <div style={{fontSize:11,color:"#3b5998",fontWeight:700,letterSpacing:3,marginBottom:4}}>MD LABS AI ANALYSIS · ATLAS Pro</div>
             <div style={{fontSize:"clamp(22px,4vw,28px)",fontWeight:900,letterSpacing:2}}>교통사고 과실비율 AI 감정서</div>
             <div style={{fontSize:12,color:"#666",marginTop:6}}>손해보험협회 과실비율 인정기준 기반 AI 분석 보고서</div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:"#888",marginTop:14,padding:"0 10px"}}>
@@ -1787,7 +1594,22 @@ function App(){
                 </tbody>
               </table>
             </div>}
-            {!pdfText&&!ocrResult?.text&&!vidEnv&&<div style={{fontSize:11,color:"#999",fontStyle:"italic"}}>첨부 증거자료 없음 — 텍스트 입력 기반 분석</div>}
+            {gpuResult&&gpuResult.success&&<div style={{marginBottom:10}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#e74c3c",marginBottom:4}}>🖥️ GPU 객체 탐지 (ATLAS Pro)</div>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <tbody>
+                  <tr><th style={{...TS.th,width:"30%"}}>모델</th><td style={TS.td}>{gpuResult.model} ({gpuResult.device})</td></tr>
+                  <tr><th style={TS.th}>추정 사고유형</th><td style={{...TS.td,fontWeight:700,color:"#c0392b"}}>{gpuResult.summary.accident_type}</td></tr>
+                  <tr><th style={TS.th}>감지 차량</th><td style={TS.td}>{gpuResult.summary.vehicle_count}대</td></tr>
+                  <tr><th style={TS.th}>보행자</th><td style={TS.td}>{gpuResult.summary.has_pedestrian?"✅ 감지":"미감지"}</td></tr>
+                  <tr><th style={TS.th}>자전거/PM</th><td style={TS.td}>{gpuResult.summary.has_bicycle?"✅ 감지":"미감지"}</td></tr>
+                  <tr><th style={TS.th}>신호등</th><td style={TS.td}>{gpuResult.summary.has_signal?`✅ ${gpuResult.summary.signal_color}`:"미감지"}</td></tr>
+                  <tr><th style={TS.th}>감지 객체</th><td style={TS.td}>{gpuResult.summary.detected_objects?.map((o,i)=>`${o.class_name}(${(o.confidence*100).toFixed(0)}%)`).join(", ")||"-"}</td></tr>
+                  <tr><th style={TS.th}>처리 시간</th><td style={TS.td}>{gpuResult.processing_time_sec}초</td></tr>
+                </tbody>
+              </table>
+            </div>}
+            {!pdfText&&!ocrResult?.text&&!vidEnv&&!gpuResult&&<div style={{fontSize:11,color:"#999",fontStyle:"italic"}}>첨부 증거자료 없음 — 텍스트 입력 기반 분석</div>}
           </div></div>
 
           {/* 3. 과실비율 */}
@@ -1910,6 +1732,9 @@ function App(){
             </p>}
             {vidEnv&&<p style={{marginTop:8}}>영상 환경 분석 결과 사고 당시 <b>{vidEnv.timeOfDay}</b>(평균밝기 {vidEnv.avgBr})이며,
             {vidEnv.hasRed||vidEnv.hasGreen?" 신호등이 감지되어 신호교차로 사고로 판단됩니다.":" 신호등 감지가 명확하지 않아 추가 확인이 필요합니다."}</p>}
+            {gpuResult&&gpuResult.success&&<p style={{marginTop:8}}>GPU 객체 탐지(ATLAS Pro) 결과 <b>{gpuResult.summary.accident_type}</b> 사고로 추정되며,
+            차량 {gpuResult.summary.vehicle_count}대{gpuResult.summary.has_pedestrian?", 보행자":""}{gpuResult.summary.has_bicycle?", 자전거/PM":""}가 감지되었습니다.
+            {gpuResult.summary.has_signal?` 신호등(${gpuResult.summary.signal_color})이 확인되었습니다.`:""}</p>}
             <p style={{marginTop:12,fontWeight:700,color:"#c0392b"}}>본 감정서는 AI 분석에 기반한 참고자료이며, 법적 구속력이 없습니다.
             정확한 과실비율은 보험사 심의 또는 법원 판단을 통해 최종 확정됩니다.</p>
           </div></div>
@@ -2058,7 +1883,7 @@ function App(){
             </div>}
           </div>}
 
-          {savedId&&<div style={{background:C.card,border:`1px solid ${C.emerald}15`,borderRadius:14,padding:14,marginBottom:10,textAlign:"center"}}>
+          {savedId&&savedId!=='local'&&<div style={{background:C.card,border:`1px solid ${C.emerald}15`,borderRadius:14,padding:14,marginBottom:10,textAlign:"center"}}>
             <div style={{fontSize:11,fontWeight:700,color:C.emerald,marginBottom:8}}>✅ 분석 결과가 서버에 저장되었습니다</div>
             {!fbSent?<div>
               <div style={{fontSize:10,color:C.t3,marginBottom:8}}>이 분석 결과가 정확한가요? (학습에 반영됩니다)</div>
@@ -2072,6 +1897,7 @@ function App(){
             </div>}
           </div>}
           {!savedId&&<div style={{textAlign:"center",marginBottom:10}}><span style={{fontSize:9,color:C.t3}}>💾 서버 저장 중...</span></div>}
+          {savedId==='local'&&<div style={{textAlign:"center",marginBottom:10}}><span style={{fontSize:9,color:C.t3}}>✅ 로컬 분석 완료 (서버 미연결)</span></div>}
 
           <div style={{padding:10,borderRadius:10,background:`${C.amber}04`,border:`1px solid ${C.amber}08`,textAlign:"center"}}>
             <p style={{fontSize:9.5,color:C.t3}}>⚠️ 참고용 · 법적 구속력 없음 · 정확한 판단은 보험사·전문가 문의</p>
@@ -2088,8 +1914,10 @@ function App(){
     <div style={{padding:"10px 16px",background:"rgba(6,9,16,.9)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,zIndex:50}}>
       <div style={{...mx,display:"flex",alignItems:"center",gap:8,padding:0}}>
         <div style={{width:30,height:30,borderRadius:9,background:`linear-gradient(135deg,${C.blue},${C.violet})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>⚖️</div>
-        <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13}}>MD Labs <span style={{fontSize:9,color:C.indigo}}>AI</span></div><div style={{fontSize:8.5,color:C.t3}}>과실비율 분석 v7.0</div></div>
+        <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13}}>MD Labs <span style={{fontSize:9,color:C.indigo}}>AI</span></div><div style={{fontSize:8.5,color:C.t3}}>과실비율 분석 ATLAS Pro</div></div>
         <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>DB {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</span>
+        {gpuAvail&&<span style={{fontSize:8,color:"#27ae60",padding:"2px 6px",borderRadius:4,background:"rgba(39,174,96,.1)",border:"1px solid rgba(39,174,96,.3)",marginLeft:4}}>🖥️ GPU 연결됨</span>}
+        {gpuAvail===false&&<span style={{fontSize:8,color:"#e74c3c",padding:"2px 6px",borderRadius:4,background:"rgba(231,76,60,.1)",border:"1px solid rgba(231,76,60,.2)",marginLeft:4,cursor:"pointer"}} onClick={()=>{const u=prompt("GPU 서버 URL:",GPU_SERVER_URL);if(u){localStorage.setItem('atlas_gpu_url',u);location.reload()}}}>GPU 미연결 ⚙️</span>}
         {stats.total>0&&<button onClick={()=>setShowKB(!showKB)} style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${showKB?`${C.violet}30`:C.b1}`,background:showKB?`${C.violet}08`:"transparent",color:showKB?C.violet:C.t3,fontSize:10,fontWeight:600,cursor:"pointer"}}>🧠 {stats.total}</button>}
       </div>
     </div>
@@ -2169,7 +1997,7 @@ function App(){
       </div>
 
       <div style={{textAlign:"center",padding:"10px 0"}}>
-        <p style={{fontSize:9,color:C.t3}}>MD Labs AI v7.0 · 손보협회 과실비율 인정기준 기반 · {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</p>
+        <p style={{fontSize:9,color:C.t3}}>MD Labs ATLAS Pro · 손보협회 과실비율 인정기준 기반 · {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</p>
       </div>
     </div>
   </div>;
