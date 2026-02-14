@@ -1100,28 +1100,7 @@ function analyzeEnv(du){return new Promise(ok=>{
 })}
 
 /* ── GPU Server (ATLAS Pro) ── */
-const GPU_MODES={local:'http://localhost:8090',cloud:localStorage.getItem('atlas_gpu_cloud_url')||'',ngrok:localStorage.getItem('atlas_gpu_ngrok_url')||''};
-const GPU_MODE=localStorage.getItem('atlas_gpu_mode')||'local';
-const GPU_SERVER_URL=(GPU_MODE==='cloud'?GPU_MODES.cloud:GPU_MODE==='ngrok'?GPU_MODES.ngrok:GPU_MODES.local)||'http://localhost:8090';
-
-/* ── Supabase 판례 검색 (ATLAS Pro) ── */
-async function searchPrecedentsDB(text,accidentType,max=5){
-  try{
-    const kw=[];
-    ['차선변경','추돌','횡단보도','과속','음주','안전거리','급제동','비보호좌회전','우회전','유턴','역주행','보행자','자전거','교차로','주차장','야간','후진','중앙선침범','직진','좌회전','합류','신호위반','적색','녹색'].forEach(k=>{if(text.includes(k))kw.push(k)});
-    if(kw.length===0)return[];
-    let catFilter='';
-    if(accidentType==='차대사람')catFilter='보행자_사고';
-    else if(accidentType==='차대자전거')catFilter='이륜차_PM';
-    else catFilter='교차로_사고';
-    const r=await fetch(`/api/precedents`,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({keywords:kw.slice(0,5).join(','),categories:catFilter,limit:max}),
-      signal:AbortSignal.timeout(8000)});
-    if(!r.ok)return[];
-    const data=await r.json();
-    return(data.results||[]).map(d=>({...d,matchScore:kw.filter(k=>(d.keywords||'').includes(k)).length*15+(d.fault_ratio?20:0),source:'supabase'}));
-  }catch(e){console.warn('판례DB:',e.message);return[]}
-}
+const GPU_SERVER_URL=localStorage.getItem('atlas_gpu_url')||'http://localhost:8090';
 async function callGPUServer(file,type='video'){
   try{
     const fd=new FormData();fd.append('file',file);
@@ -1176,7 +1155,8 @@ const STEPS=[
   {id:"ocr",icon:"🔍",label:"OCR 분석",desc:"이미지→텍스트 변환"},
   {id:"video",icon:"🎬",label:"영상 환경분석",desc:"주야간·신호 추출"},
   {id:"gpu",icon:"🖥️",label:"GPU 객체탐지",desc:"차량·보행자·신호 AI 탐지"},
-  {id:"match",icon:"📋",label:"도표 매칭",desc:"과실비율 인정기준 검색"},
+  {id:"claude",icon:"🤖",label:"Claude AI 추론",desc:"1차 분석 · 도표매칭 · 과실산정"},
+  {id:"match",icon:"📋",label:"엔진 비교분석",desc:"패턴매칭 검증 · 학습데이터 축적"},
   {id:"similar",icon:"🧠",label:"판례 검색",desc:"유사 판례 비교"},
   {id:"result",icon:"⚖️",label:"결과 산출",desc:"과실비율+법적근거"},
 ];
@@ -1288,7 +1268,6 @@ function App(){
   const[llmLoading,setLlmLoading]=useState(false);
   const[gpuResult,setGpuResult]=useState(null);
   const[gpuAvail,setGpuAvail]=useState(null);
-  const[gpuMode,setGpuMode]=useState(GPU_MODE);
   const setStep=(id,status,progress,msg)=>setStepStates(p=>({...p,[id]:{status,progress:progress??p[id]?.progress,msg:msg??p[id]?.msg}}));
   const resetSteps=()=>setStepStates({});
   const mx={maxWidth:900,margin:"0 auto",padding:"0 16px"};
@@ -1449,74 +1428,133 @@ function App(){
       await new Promise(r=>setTimeout(r,200));
     }else{setStep("gpu","skip",null,gpuAvail===false?"GPU 서버 미연결":"영상/이미지 없음")}
 
-    // Step 5: Diagram match
-    if(combined.length<5){setStep("match","error",null,"텍스트 부족");setRunning(false);return}
-    setStep("match","running",40,`${DB.length}개 도표 대조 중...`);
-    await new Promise(r=>setTimeout(r,400));
-    const m=matchDiagram(combined);
-    if(!m){
-      setStep("match","error",null,"매칭 도표 없음");
-      setResult({error:true,text:combined});setRunning(false);setPage("result");return;
-    }
-    setStep("match","done",100,`${m.match.id} · ${m.match.t} (점수:${m.matchScore})`);
+    // ═══ Step 6: Claude AI 1차 추론 (PRIMARY) ═══
+    if(combined.length<5){setStep("claude","error",null,"텍스트 부족");setRunning(false);return}
+    setStep("claude","running",10,"Claude AI 분석 요청 중...");
+    const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
+    let claudeInput=combined;
+    if(gpuResult?.for_claude)claudeInput+="\n\n"+gpuResult.for_claude;
+    // 판례 DB 선행 검색 (Claude에게 제공)
+    const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
+    const dbResults=await searchPrecedentsDB(combined,accType,10);
+    if(dbResults.length>0)claudeInput+="\n\n## 유사 판례 DB 검색 결과\n"+dbResults.slice(0,5).map(d=>`- ${d.case_number||''} (${d.court||''}) 과실${d.fault_ratio||'?'} ${d.categories||''} ${(d.summary||'').slice(0,100)}`).join('\n');
+    setStep("claude","running",30,"Claude AI 추론 중 (도표매칭 + 과실산정)...");
+    let claudeResult=null;
+    try{
+      const cr=await callClaudeAPI(claudeInput,diagramListStr);
+      if(cr?.success&&cr.result){claudeResult=cr.result;claudeResult._tokens=cr.tokens||0;
+        setStep("claude","done",100,`도표 ${cr.result.diagram_id||'?'} · 과실 ${cr.result.fault_a??'?'}:${cr.result.fault_b??'?'} · 신뢰도 ${cr.result.confidence||'?'}`);
+      }else{setStep("claude","done",100,"Claude 응답 파싱 실패 → 엔진 폴백")}
+    }catch(e){setStep("claude","error",null,"Claude API 오류: "+e.message+" → 엔진 폴백")}
     await new Promise(r=>setTimeout(r,200));
 
-    // Step 6: Similar (로컬 KB + Supabase 69,370건)
+    // ═══ Step 7: 엔진 비교분석 (SECONDARY — 학습/검증) ═══
+    setStep("match","running",40,`${DB.length}개 도표 패턴매칭 (비교용)...`);
+    await new Promise(r=>setTimeout(r,300));
+    const m=matchDiagram(combined);
+    if(m){setStep("match","done",100,`엔진: ${m.match.id} · ${m.match.t} (${m.matchScore}점)`)}
+    else{setStep("match","done",100,"엔진 매칭 실패 (Claude 결과 사용)")}
+    await new Promise(r=>setTimeout(r,150));
+
+    // ═══ Claude도 엔진도 실패 → 에러 ═══
+    if(!claudeResult&&!m){
+      setStep("result","error",null,"분석 불가");
+      setResult({error:true,text:combined});setRunning(false);setPage("result");return;
+    }
+
+    // ═══ Step 8: 판례 검색 ═══
     setStep("similar","running",30,"유사 판례 검색...");
     await new Promise(r=>setTimeout(r,200));
     const sim=findSimilar(combined,kb);
-    setStep("similar","running",60,"Supabase 판례 DB 검색...");
-    const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
-    const dbResults=await searchPrecedentsDB(combined,accType,10);
     const allSimilar=[...sim,...dbResults.filter(d=>!sim.some(s=>s.id===d.id))].sort((a,b)=>(b.matchScore||0)-(a.matchScore||0)).slice(0,10);
     setStep("similar","done",100,allSimilar.length?`${allSimilar.length}건 (로컬${sim.length}+DB${dbResults.length})`:"없음");
     await new Promise(r=>setTimeout(r,150));
 
-    // Step 7: Result
-    setStep("result","running",60,"과실비율 산출...");
+    // ═══ Step 9: 결과 산출 (Claude 1차 · 엔진 2차) ═══
+    setStep("result","running",60,"과실비율 종합 산출...");
     await new Promise(r=>setTimeout(r,400));
+
+    // 엔진 결과 (비교/학습용)
     const mods=detectMods(combined);
-    const{fA,fB}=calcFault(m.match,mods);
-    const isPed=m.match.bf.p!==undefined;
-    const resultObj={diagram:m.match,confidence:m.confidence,matchScore:m.matchScore,alts:m.alts,faultA:fA,faultB:fB,
-      labelA:m.match.la||(isPed?"차량":"A"),labelB:m.match.lb||(isPed?"보행자":"B"),
-      mods,appliedMods:(m.match.mods||[]).map(mod=>({...mod,applied:mods.some(dm=>mod.n.includes(dm)||dm.includes(mod.n))})),
-      laws:getLaws(m.match,combined),similar:allSimilar,dbPrecedents:dbResults,text:combined};
-    resultObj.analysis=generateAnalysis(resultObj,safeInput);
+    let engineFaultA=50,engineFaultB=50,engineDiagram=null;
+    if(m){const ef=calcFault(m.match,mods);engineFaultA=ef.fA;engineFaultB=ef.fB;engineDiagram=m.match}
+
+    // PRIMARY 도표 결정: Claude 우선 → 엔진 폴백
+    let primaryDiagram,primaryFaultA,primaryFaultB,primarySource;
+    if(claudeResult&&claudeResult.diagram_id){
+      const claudeDiag=DB.find(d=>d.id===claudeResult.diagram_id);
+      primaryDiagram=claudeDiag||engineDiagram||DB[0];
+      primaryFaultA=claudeResult.fault_a??engineFaultA;
+      primaryFaultB=claudeResult.fault_b??engineFaultB;
+      primarySource='claude';
+    }else if(m){
+      primaryDiagram=engineDiagram;
+      primaryFaultA=engineFaultA;
+      primaryFaultB=engineFaultB;
+      primarySource='engine';
+    }else{
+      primaryDiagram=DB[0];primaryFaultA=50;primaryFaultB=50;primarySource='fallback';
+    }
+
+    const isPed=primaryDiagram.bf?.p!==undefined;
+    const resultObj={
+      diagram:primaryDiagram,
+      confidence:claudeResult?.confidence||(m?.confidence)||"중",
+      matchScore:m?.matchScore||0,
+      alts:m?.alts||[],
+      faultA:primaryFaultA,faultB:primaryFaultB,
+      labelA:primaryDiagram.la||(isPed?"차량":"A"),
+      labelB:primaryDiagram.lb||(isPed?"보행자":"B"),
+      mods,
+      appliedMods:(primaryDiagram.mods||[]).map(mod=>({...mod,applied:mods.some(dm=>mod.n.includes(dm)||dm.includes(mod.n))})),
+      laws:getLaws(primaryDiagram,combined),
+      similar:allSimilar,dbPrecedents:dbResults,text:combined,
+      primarySource,
+      claudeResult,
+      engineMatch:m,
+      engineFault:{a:engineFaultA,b:engineFaultB},
+      diagramMatch:primarySource==='claude'&&m?(primaryDiagram.id===m.match.id?"일치":"불일치"):"N/A"
+    };
+    if(claudeResult?.analysis){
+      resultObj.analysis=claudeResult.analysis;
+      if(claudeResult.reasoning)resultObj.analysis=claudeResult.reasoning+"\n\n"+resultObj.analysis;
+    }else{
+      resultObj.analysis=generateAnalysis(resultObj,safeInput);
+    }
     setResult(resultObj);
+    setLlmResult(claudeResult||null);setLlmLoading(false);
     setSavedId(null);setFbSent(false);
-    // ═══ 서버 자동 저장 ═══
+
+    // ═══ 서버 저장 ═══
     saveToServer({
       input_text:safeInput,input_type:hasPDF?'pdf':hasImage?'ocr':hasVideo?'video':'text',
       has_pdf:hasPDF,has_image:hasImage,has_video:hasVideo,
       pdf_text:pdfText,ocr_text:ocrResult?.text||'',video_env:vidEnv,
-      diagram_id:m.match.id,diagram_title:m.match.t,category:m.match.cat,subcategory:m.match.sub,
-      confidence:m.confidence,match_score:m.matchScore,alt_diagrams:m.alts,
-      fault_a:fA,fault_b:fB,label_a:resultObj.labelA,label_b:resultObj.labelB,
-      base_fault_a:isPed?m.match.bf.c:m.match.bf.a,base_fault_b:isPed?m.match.bf.p:m.match.bf.b,
+      diagram_id:primaryDiagram.id,diagram_title:primaryDiagram.t,category:primaryDiagram.cat,subcategory:primaryDiagram.sub,
+      confidence:resultObj.confidence,match_score:resultObj.matchScore,alt_diagrams:resultObj.alts,
+      fault_a:primaryFaultA,fault_b:primaryFaultB,label_a:resultObj.labelA,label_b:resultObj.labelB,
+      base_fault_a:isPed?(primaryDiagram.bf?.c||0):(primaryDiagram.bf?.a||0),
+      base_fault_b:isPed?(primaryDiagram.bf?.p||0):(primaryDiagram.bf?.b||0),
       detected_mods:mods,applied_mods:resultObj.appliedMods,laws:resultObj.laws.map(l=>({a:l.a,d:l.d})),
-      analysis_text:resultObj.analysis,llm_used:false,
+      analysis_text:resultObj.analysis,
+      llm_used:primarySource==='claude',primary_source:primarySource,
       gpu_used:!!gpuResult,gpu_result:gpuResult?.summary||null
     }).then(res=>{if(res?.id)setSavedId(res.id);else setSavedId('local')}).catch(()=>{setSavedId('local')});
-    // ═══ Claude API 보조 분석 (백그라운드) ═══
-    setLlmResult(null);setLlmLoading(true);
-    const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
-    let claudeInput=combined;
-    if(gpuResult?.for_claude)claudeInput+="\n\n"+gpuResult.for_claude;
-    if(dbResults.length>0)claudeInput+="\n\n## 유사 판례 DB 검색 결과\n"+dbResults.slice(0,5).map(d=>`- ${d.case_number||''} (${d.court||''}) 과실${d.fault_ratio||'?'} ${d.categories||''} ${(d.summary||'').slice(0,100)}`).join('\n');
-    callClaudeAPI(claudeInput,diagramListStr).then(cr=>{
-      if(cr?.success&&cr.result){setLlmResult(cr.result);setLlmLoading(false);
-        // ═══ Claude 분석 결과 DB 업데이트 (학습 데이터) ═══
-        const llmData={llm_response:cr.result,llm_used:true,llm_diagram_id:cr.result.diagram_id||null,
-          llm_fault_a:cr.result.fault_a,llm_fault_b:cr.result.fault_b,llm_confidence:cr.result.confidence||null,
-          llm_reasoning:cr.result.reasoning||'',llm_analysis:cr.result.analysis||'',
-          llm_modifiers:cr.result.detected_modifiers||[],llm_tokens:cr.tokens||0,
-          engine_diagram_id:m.match.id};
-        fetch(API_BASE+'/api/save',{method:'PATCH',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({session_id:SESSION_ID,llm_data:llmData})}).catch(()=>{});
-      } else setLlmLoading(false);
-    }).catch(()=>{setLlmLoading(false);setLlmResult({error:true,raw:'API 연결 실패'})});
-    setStep("result","done",100,`${m.match.id} · ${fA}:${fB}`);
+
+    // ═══ Claude 학습 데이터 저장 ═══
+    if(claudeResult){
+      const llmData={llm_response:claudeResult,llm_used:true,llm_diagram_id:claudeResult.diagram_id||null,
+        llm_fault_a:claudeResult.fault_a,llm_fault_b:claudeResult.fault_b,llm_confidence:claudeResult.confidence||null,
+        llm_reasoning:claudeResult.reasoning||'',llm_analysis:claudeResult.analysis||'',
+        llm_modifiers:claudeResult.detected_modifiers||[],llm_tokens:claudeResult._tokens||0,
+        engine_diagram_id:m?.match?.id||null,
+        engine_fault_a:engineFaultA,engine_fault_b:engineFaultB,
+        primary_source:primarySource};
+      fetch(API_BASE+'/api/save',{method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({session_id:SESSION_ID,llm_data:llmData})}).catch(()=>{});
+    }
+
+    setStep("result","done",100,`${primarySource==='claude'?'🤖':'📋'} ${primaryDiagram.id} · ${primaryFaultA}:${primaryFaultB}`);
     setRunning(false);setPage("result");
   },[input,files,vidSrc,kb,running]);
 
@@ -1697,11 +1735,10 @@ function App(){
           </div></div>}
 
           {/* 7. 유사 판례 */}
-          {r.similar?.length>0&&<div style={TS.sec}><div style={TS.st}>제7장 유사 판례 분석 {r.dbPrecedents?.length>0&&`(DB ${r.dbPrecedents.length}건 포함)`}</div><div style={TS.sb}>
-            {r.similar.map(c=><div key={c.id} style={{padding:8,border:"1px solid #e8e8f0",borderRadius:6,marginBottom:6,background:c.source==='supabase'?"#f0fff0":"#fafafa"}}>
-              <div style={{fontSize:11,fontWeight:700}}>{c.source==='supabase'?'📗':'📘'} {c.case_name||c.accidentType||''} — {c.case_number||c.caseNumber||"판례번호 미상"}</div>
-              <div style={{fontSize:10.5,color:"#666"}}>과실비율: {c.fault_a||c.faultA||'?'}% : {c.fault_b||c.faultB||'?'}% {(c.court)||''} {c.date?`| ${c.date}`:''}</div>
-              {c.summary&&<div style={{fontSize:10,color:"#555",marginTop:3,lineHeight:1.6}}>{c.summary.slice(0,200)}</div>}
+          {r.similar?.length>0&&<div style={TS.sec}><div style={TS.st}>제7장 유사 판례 분석</div><div style={TS.sb}>
+            {r.similar.map(c=><div key={c.id} style={{padding:8,border:"1px solid #e8e8f0",borderRadius:6,marginBottom:6,background:"#fafafa"}}>
+              <div style={{fontSize:11,fontWeight:700}}>{c.accidentType} — {c.caseNumber||"판례번호 미상"}</div>
+              <div style={{fontSize:10.5,color:"#666"}}>과실비율: {c.faultA}% : {c.faultB}% {c.court&&`| ${c.court}`}</div>
             </div>)}
           </div></div>}
 
@@ -1865,19 +1902,9 @@ function App(){
           </div>}
 
           {r.similar?.length>0&&<div style={{background:C.card,border:`1px solid ${C.violet}10`,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🧠 유사 판례 {r.similar.length}건 {r.dbPrecedents?.length>0&&<span style={{fontSize:9,color:C.emerald}}>(DB {r.dbPrecedents.length}건 포함)</span>}</div>
-            {r.similar.map(c=><div key={c.id} style={{padding:8,borderRadius:8,background:"rgba(6,9,16,.3)",marginBottom:4,fontSize:11}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span>{c.source==='supabase'?<Tag color={C.emerald} sx={{fontSize:8,marginRight:3}}>DB</Tag>:<Tag color={C.violet} sx={{fontSize:8,marginRight:3}}>KB</Tag>}
-                  <span style={{color:C.blue}}>{c.fault_a||c.faultA||'?'}%</span>:<span style={{color:C.red}}>{c.fault_b||c.faultB||'?'}%</span>
-                  {' · '}{c.case_name||c.accidentType||''}
-                </span>
-                <span style={{fontSize:9,color:C.t3}}>{c.matchScore}점</span>
-              </div>
-              {c.source==='supabase'&&<div style={{fontSize:10,color:C.t3,marginTop:3}}>
-                {c.case_number&&<span>{c.case_number} · </span>}{c.court&&<span>{c.court} · </span>}{c.date&&<span>{c.date}</span>}
-                {c.summary&&<div style={{marginTop:2,color:C.t2,lineHeight:1.5}}>{c.summary.slice(0,150)}</div>}
-              </div>}
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🧠 유사 판례 {r.similar.length}건</div>
+            {r.similar.map(c=><div key={c.id} style={{padding:8,borderRadius:8,background:"rgba(6,9,16,.3)",marginBottom:3,fontSize:11}}>
+              <span style={{color:C.blue}}>{c.faultA}%</span>:<span style={{color:C.red}}>{c.faultB}%</span> · {c.accidentType} {c.caseNumber&&<span style={{color:C.t3}}>({c.caseNumber})</span>}
             </div>)}
           </div>}
 
@@ -1903,23 +1930,63 @@ function App(){
             <p style={{fontSize:10,color:C.t3,marginTop:6}}>전문 감정서 형식으로 출력 · 인쇄/PDF 저장 가능</p>
           </div>
 
-          {(llmLoading||llmResult)&&<div style={{background:C.card,border:`1px solid ${C.violet}15`,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-              <span>🤖</span>
-              <span style={{fontSize:11,fontWeight:700,color:C.violet}}>Claude AI 보조 분석</span>
-              {llmLoading&&<span style={{fontSize:9,color:C.t3,animation:"pulse 1.5s infinite"}}>분석 중...</span>}
+          {/* ═══ v8.0: Claude 추론 + 엔진 비교 패널 ═══ */}
+          {r.primarySource&&<div style={{background:r.primarySource==='claude'?"rgba(99,102,241,.04)":"rgba(59,130,246,.04)",border:`1px solid ${r.primarySource==='claude'?C.violet:C.blue}15`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+              <span style={{fontSize:16}}>{r.primarySource==='claude'?'🤖':'📋'}</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:800,color:r.primarySource==='claude'?C.violet:C.blue}}>
+                  {r.primarySource==='claude'?'Claude AI 1차 추론 결과':'패턴매칭 엔진 결과 (Claude 폴백)'}
+                </div>
+                <div style={{fontSize:9,color:C.t3}}>
+                  {r.primarySource==='claude'?'Claude가 도표 선택 + 과실비율 산정 · 엔진은 비교/학습':'Claude API 연결 실패 → 엔진 자체 분석'}
+                </div>
+              </div>
             </div>
-            {llmResult&&<div>
-              {llmResult.reasoning&&<p style={{fontSize:11,color:C.t2,lineHeight:1.7,marginBottom:8}}>{llmResult.reasoning}</p>}
-              {llmResult.analysis&&<p style={{fontSize:11,color:C.t2,lineHeight:1.7,marginBottom:8}}>{llmResult.analysis}</p>}
-              {llmResult.diagram_id&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
-                <Tag color={C.violet}>AI추천: {llmResult.diagram_id}</Tag>
-                {llmResult.fault_a!==undefined&&<Tag color={C.cyan}>AI과실: {llmResult.fault_a}:{llmResult.fault_b}</Tag>}
-                {llmResult.confidence&&<Tag color={C.amber}>신뢰도: {llmResult.confidence}</Tag>}
+            {r.claudeResult&&<div style={{marginBottom:10}}>
+              {r.claudeResult.reasoning&&<div style={{padding:10,borderRadius:8,background:"rgba(99,102,241,.04)",border:`1px solid ${C.violet}10`,marginBottom:8}}>
+                <div style={{fontSize:10,fontWeight:700,color:C.violet,marginBottom:4}}>🧠 AI 추론 과정</div>
+                <p style={{fontSize:11,color:C.t2,lineHeight:1.8,whiteSpace:"pre-line"}}>{r.claudeResult.reasoning}</p>
               </div>}
-              {llmResult.detected_modifiers?.length>0&&<div style={{fontSize:10,color:C.t3,marginTop:4}}>수정요소: {llmResult.detected_modifiers.join(', ')}</div>}
-              {llmResult.error&&<p style={{fontSize:10,color:C.amber}}>{llmResult.raw||'AI 분석 결과 파싱 실패'}</p>}
+              {r.claudeResult.analysis&&<div style={{padding:10,borderRadius:8,background:"rgba(16,185,129,.03)",border:`1px solid ${C.emerald}10`,marginBottom:8}}>
+                <div style={{fontSize:10,fontWeight:700,color:C.emerald,marginBottom:4}}>📝 AI 분석 의견</div>
+                <p style={{fontSize:11,color:C.t2,lineHeight:1.8,whiteSpace:"pre-line"}}>{r.claudeResult.analysis}</p>
+              </div>}
+              {r.claudeResult.detected_modifiers?.length>0&&<div style={{fontSize:10,color:C.t2,marginBottom:6}}>
+                <span style={{fontWeight:700,color:C.amber}}>AI 감지 수정요소:</span> {r.claudeResult.detected_modifiers.join(', ')}
+              </div>}
             </div>}
+            {r.engineMatch&&<div style={{background:"rgba(6,9,16,.4)",borderRadius:10,padding:10,border:`1px solid ${C.b1}`}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:8,display:"flex",alignItems:"center",gap:4}}>
+                📊 엔진 vs Claude 비교 <span style={{fontSize:8,color:C.t3,fontWeight:400}}>(학습 데이터 축적 중)</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:10}}>
+                <div style={{fontWeight:700,color:C.t3,padding:"4px 6px"}}>항목</div>
+                <div style={{fontWeight:700,color:C.blue,padding:"4px 6px",textAlign:"center"}}>📋 엔진</div>
+                <div style={{fontWeight:700,color:C.violet,padding:"4px 6px",textAlign:"center"}}>🤖 Claude</div>
+                <div style={{color:C.t2,padding:"4px 6px",borderTop:`1px solid ${C.b1}`}}>도표</div>
+                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`}}>{r.engineMatch.match.id}</div>
+                <div style={{color:r.claudeResult?.diagram_id===r.engineMatch.match.id?C.emerald:C.amber,fontWeight:700,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`}}>
+                  {r.claudeResult?.diagram_id||'-'} {r.claudeResult?.diagram_id===r.engineMatch.match.id?'✅':'⚠️'}
+                </div>
+                <div style={{color:C.t2,padding:"4px 6px",borderTop:`1px solid ${C.b1}`}}>과실</div>
+                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",fontFamily:"var(--mono)",borderTop:`1px solid ${C.b1}`}}>{r.engineFault?.a}:{r.engineFault?.b}</div>
+                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",fontFamily:"var(--mono)",fontWeight:700,borderTop:`1px solid ${C.b1}`}}>{r.faultA}:{r.faultB}</div>
+                <div style={{color:C.t2,padding:"4px 6px",borderTop:`1px solid ${C.b1}`}}>신뢰도</div>
+                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`}}>{r.engineMatch.confidence} ({r.engineMatch.matchScore}점)</div>
+                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`}}>{r.claudeResult?.confidence||'-'}</div>
+                <div style={{color:C.t2,padding:"4px 6px",borderTop:`1px solid ${C.b1}`}}>수정요소</div>
+                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`,fontSize:9}}>{r.mods?.join(',')||'-'}</div>
+                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`,fontSize:9}}>{r.claudeResult?.detected_modifiers?.join(',')||'-'}</div>
+              </div>
+              {r.diagramMatch==='불일치'&&<div style={{marginTop:6,padding:6,background:`${C.amber}06`,border:`1px solid ${C.amber}12`,borderRadius:6,fontSize:10,color:C.amber}}>
+                ⚠️ 도표 불일치 — Claude({r.claudeResult?.diagram_id})와 엔진({r.engineMatch.match.id}) 추천 상이. 학습 데이터로 축적.
+              </div>}
+              {r.diagramMatch==='일치'&&<div style={{marginTop:6,padding:6,background:`${C.emerald}06`,border:`1px solid ${C.emerald}12`,borderRadius:6,fontSize:10,color:C.emerald}}>
+                ✅ 도표 일치 — Claude + 엔진 모두 도표 {r.engineMatch.match.id} 추천. 높은 신뢰도.
+              </div>}
+            </div>}
+            {!r.engineMatch&&r.primarySource==='claude'&&<div style={{fontSize:10,color:C.t3,fontStyle:"italic"}}>엔진 매칭 실패 — Claude 단독 분석</div>}
           </div>}
 
           {savedId&&savedId!=='local'&&<div style={{background:C.card,border:`1px solid ${C.emerald}15`,borderRadius:14,padding:14,marginBottom:10,textAlign:"center"}}>
@@ -1954,19 +2021,9 @@ function App(){
       <div style={{...mx,display:"flex",alignItems:"center",gap:8,padding:0}}>
         <div style={{width:30,height:30,borderRadius:9,background:`linear-gradient(135deg,${C.blue},${C.violet})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>⚖️</div>
         <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13}}>MD Labs <span style={{fontSize:9,color:C.indigo}}>AI</span></div><div style={{fontSize:8.5,color:C.t3}}>과실비율 분석 ATLAS Pro</div></div>
-        <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>DB {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규 · 69,370판례</span>
-        {gpuAvail&&<span style={{fontSize:8,color:"#27ae60",padding:"2px 6px",borderRadius:4,background:"rgba(39,174,96,.1)",border:"1px solid rgba(39,174,96,.3)",marginLeft:4,cursor:"pointer"}} onClick={()=>{
-          const m=prompt("GPU 모드 선택:\n\n1 = LOCAL (무료, PC 직접)\n2 = NGROK (무료, 외부 터널)\n3 = CLOUD (유료, 24시간)\n\n현재: "+gpuMode.toUpperCase()+"\nURL: "+GPU_SERVER_URL,"");
-          if(m==='1'){localStorage.setItem('atlas_gpu_mode','local');localStorage.removeItem('atlas_gpu_ngrok_url');localStorage.removeItem('atlas_gpu_cloud_url');location.reload()}
-          else if(m==='2'){const u=prompt("ngrok URL:",GPU_MODES.ngrok||"https://xxxxx.ngrok-free.dev");if(u){localStorage.setItem('atlas_gpu_mode','ngrok');localStorage.setItem('atlas_gpu_ngrok_url',u);location.reload()}}
-          else if(m==='3'){const u=prompt("Cloud GPU URL:",GPU_MODES.cloud||"https://your-cloud-gpu.com");if(u){localStorage.setItem('atlas_gpu_mode','cloud');localStorage.setItem('atlas_gpu_cloud_url',u);location.reload()}}
-        }}>🖥️ GPU {gpuMode==='cloud'?'☁️유료':'🏠무료'} 연결됨</span>}
-        {gpuAvail===false&&<span style={{fontSize:8,color:"#e74c3c",padding:"2px 6px",borderRadius:4,background:"rgba(231,76,60,.1)",border:"1px solid rgba(231,76,60,.2)",marginLeft:4,cursor:"pointer"}} onClick={()=>{
-          const m=prompt("GPU 모드 선택:\n\n1 = LOCAL (무료, PC 직접)\n2 = NGROK (무료, 외부 터널)\n3 = CLOUD (유료, 24시간)\n\n현재: "+gpuMode.toUpperCase()+"\nURL: "+GPU_SERVER_URL,"");
-          if(m==='1'){localStorage.setItem('atlas_gpu_mode','local');location.reload()}
-          else if(m==='2'){const u=prompt("ngrok URL:",GPU_MODES.ngrok||"https://xxxxx.ngrok-free.dev");if(u){localStorage.setItem('atlas_gpu_mode','ngrok');localStorage.setItem('atlas_gpu_ngrok_url',u);location.reload()}}
-          else if(m==='3'){const u=prompt("Cloud GPU URL:",GPU_MODES.cloud||"https://your-cloud-gpu.com");if(u){localStorage.setItem('atlas_gpu_mode','cloud');localStorage.setItem('atlas_gpu_cloud_url',u);location.reload()}}
-        }}>GPU 미연결 ⚙️</span>}
+        <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>DB {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</span>
+        {gpuAvail&&<span style={{fontSize:8,color:"#27ae60",padding:"2px 6px",borderRadius:4,background:"rgba(39,174,96,.1)",border:"1px solid rgba(39,174,96,.3)",marginLeft:4}}>🖥️ GPU 연결됨</span>}
+        {gpuAvail===false&&<span style={{fontSize:8,color:"#e74c3c",padding:"2px 6px",borderRadius:4,background:"rgba(231,76,60,.1)",border:"1px solid rgba(231,76,60,.2)",marginLeft:4,cursor:"pointer"}} onClick={()=>{const u=prompt("GPU 서버 URL:",GPU_SERVER_URL);if(u){localStorage.setItem('atlas_gpu_url',u);location.reload()}}}>GPU 미연결 ⚙️</span>}
         {stats.total>0&&<button onClick={()=>setShowKB(!showKB)} style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${showKB?`${C.violet}30`:C.b1}`,background:showKB?`${C.violet}08`:"transparent",color:showKB?C.violet:C.t3,fontSize:10,fontWeight:600,cursor:"pointer"}}>🧠 {stats.total}</button>}
       </div>
     </div>
@@ -1975,7 +2032,7 @@ function App(){
         <h1 style={{fontSize:"clamp(20px,5vw,30px)",fontWeight:900,lineHeight:1.3,marginBottom:4}}>
           교통사고 <span style={{background:`linear-gradient(135deg,${C.blue},${C.violet})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>과실비율</span> 분석
         </h1>
-        <p style={{fontSize:12,color:C.t2}}>사고 상황 입력 → AI 분석 → 과실비율 즉시 확인</p>
+        <p style={{fontSize:12,color:C.t2}}>사고 상황 입력 → Claude AI 추론 → 과실비율 즉시 산정</p>
       </div>
 
       {running&&<AgentPipeline stepStates={stepStates}/>}
@@ -2034,7 +2091,7 @@ function App(){
           color:running?"#818cf8":(input.trim()||files.length>0||vidSrc)?"#fff":"#475569",
           fontSize:15,fontWeight:800,cursor:running?"wait":"pointer",transition:"all .3s",marginBottom:18,
           animation:running?"pulse 1.5s infinite":"none"}}>
-        {running?"🔄 AI 에이전트 분석 중...":"⚖️ 과실비율 분석 시작"}
+        {running?"🤖 Claude AI 추론 중...":"⚖️ AI 과실비율 분석 시작"}
       </button>
 
       <div style={{marginBottom:16}}>
