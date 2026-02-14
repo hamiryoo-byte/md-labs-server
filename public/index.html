@@ -1100,7 +1100,9 @@ function analyzeEnv(du){return new Promise(ok=>{
 })}
 
 /* ── GPU Server (ATLAS Pro) ── */
-const GPU_SERVER_URL=localStorage.getItem('atlas_gpu_url')||'http://localhost:8090';
+const GPU_MODES={local:'http://localhost:8090',cloud:localStorage.getItem('atlas_gpu_cloud_url')||'',ngrok:localStorage.getItem('atlas_gpu_ngrok_url')||''};
+const GPU_MODE=localStorage.getItem('atlas_gpu_mode')||'local';
+const GPU_SERVER_URL=(GPU_MODE==='cloud'?GPU_MODES.cloud:GPU_MODE==='ngrok'?GPU_MODES.ngrok:GPU_MODES.local)||'http://localhost:8090';
 async function callGPUServer(file,type='video'){
   try{
     const fd=new FormData();fd.append('file',file);
@@ -1267,6 +1269,7 @@ function App(){
   const[llmLoading,setLlmLoading]=useState(false);
   const[gpuResult,setGpuResult]=useState(null);
   const[gpuAvail,setGpuAvail]=useState(null);
+  const[gpuMode,setGpuMode]=useState(GPU_MODE);
   const setStep=(id,status,progress,msg)=>setStepStates(p=>({...p,[id]:{status,progress:progress??p[id]?.progress,msg:msg??p[id]?.msg}}));
   const resetSteps=()=>setStepStates({});
   const mx={maxWidth:900,margin:"0 auto",padding:"0 16px"};
@@ -1916,8 +1919,18 @@ function App(){
         <div style={{width:30,height:30,borderRadius:9,background:`linear-gradient(135deg,${C.blue},${C.violet})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>⚖️</div>
         <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13}}>MD Labs <span style={{fontSize:9,color:C.indigo}}>AI</span></div><div style={{fontSize:8.5,color:C.t3}}>과실비율 분석 ATLAS Pro</div></div>
         <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>DB {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</span>
-        {gpuAvail&&<span style={{fontSize:8,color:"#27ae60",padding:"2px 6px",borderRadius:4,background:"rgba(39,174,96,.1)",border:"1px solid rgba(39,174,96,.3)",marginLeft:4}}>🖥️ GPU 연결됨</span>}
-        {gpuAvail===false&&<span style={{fontSize:8,color:"#e74c3c",padding:"2px 6px",borderRadius:4,background:"rgba(231,76,60,.1)",border:"1px solid rgba(231,76,60,.2)",marginLeft:4,cursor:"pointer"}} onClick={()=>{const u=prompt("GPU 서버 URL:",GPU_SERVER_URL);if(u){localStorage.setItem('atlas_gpu_url',u);location.reload()}}}>GPU 미연결 ⚙️</span>}
+        {gpuAvail&&<span style={{fontSize:8,color:"#27ae60",padding:"2px 6px",borderRadius:4,background:"rgba(39,174,96,.1)",border:"1px solid rgba(39,174,96,.3)",marginLeft:4,cursor:"pointer"}} onClick={()=>{
+          const m=prompt("GPU 모드 선택:\n\n1 = LOCAL (무료, PC 직접)\n2 = NGROK (무료, 외부 터널)\n3 = CLOUD (유료, 24시간)\n\n현재: "+gpuMode.toUpperCase()+"\nURL: "+GPU_SERVER_URL,"");
+          if(m==='1'){localStorage.setItem('atlas_gpu_mode','local');localStorage.removeItem('atlas_gpu_ngrok_url');localStorage.removeItem('atlas_gpu_cloud_url');location.reload()}
+          else if(m==='2'){const u=prompt("ngrok URL:",GPU_MODES.ngrok||"https://xxxxx.ngrok-free.dev");if(u){localStorage.setItem('atlas_gpu_mode','ngrok');localStorage.setItem('atlas_gpu_ngrok_url',u);location.reload()}}
+          else if(m==='3'){const u=prompt("Cloud GPU URL:",GPU_MODES.cloud||"https://your-cloud-gpu.com");if(u){localStorage.setItem('atlas_gpu_mode','cloud');localStorage.setItem('atlas_gpu_cloud_url',u);location.reload()}}
+        }}>🖥️ GPU {gpuMode==='cloud'?'☁️유료':'🏠무료'} 연결됨</span>}
+        {gpuAvail===false&&<span style={{fontSize:8,color:"#e74c3c",padding:"2px 6px",borderRadius:4,background:"rgba(231,76,60,.1)",border:"1px solid rgba(231,76,60,.2)",marginLeft:4,cursor:"pointer"}} onClick={()=>{
+          const m=prompt("GPU 모드 선택:\n\n1 = LOCAL (무료, PC 직접)\n2 = NGROK (무료, 외부 터널)\n3 = CLOUD (유료, 24시간)\n\n현재: "+gpuMode.toUpperCase()+"\nURL: "+GPU_SERVER_URL,"");
+          if(m==='1'){localStorage.setItem('atlas_gpu_mode','local');location.reload()}
+          else if(m==='2'){const u=prompt("ngrok URL:",GPU_MODES.ngrok||"https://xxxxx.ngrok-free.dev");if(u){localStorage.setItem('atlas_gpu_mode','ngrok');localStorage.setItem('atlas_gpu_ngrok_url',u);location.reload()}}
+          else if(m==='3'){const u=prompt("Cloud GPU URL:",GPU_MODES.cloud||"https://your-cloud-gpu.com");if(u){localStorage.setItem('atlas_gpu_mode','cloud');localStorage.setItem('atlas_gpu_cloud_url',u);location.reload()}}
+        }}>GPU 미연결 ⚙️</span>}
         {stats.total>0&&<button onClick={()=>setShowKB(!showKB)} style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${showKB?`${C.violet}30`:C.b1}`,background:showKB?`${C.violet}08`:"transparent",color:showKB?C.violet:C.t3,fontSize:10,fontWeight:600,cursor:"pointer"}}>🧠 {stats.total}</button>}
       </div>
     </div>
