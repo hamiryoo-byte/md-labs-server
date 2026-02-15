@@ -1459,18 +1459,18 @@ function App(){
     const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
     const dbResults=await searchPrecedentsDB(combined,accType,10);
     if(dbResults.length>0)claudeInput+="\n\n## 유사 판례 DB 검색 결과\n"+dbResults.slice(0,5).map(d=>`- ${d.case_number||''} (${d.court||''}) 과실${d.fault_ratio||'?'} ${d.categories||''} ${(d.summary||'').slice(0,100)}`).join('\n');
-    setStep("claude","running",30,"Claude AI 추론 중 (도표매칭 + 과실산정)...");
+    setStep("claude","running",30,"Claude AI 추론 중...");
     let claudeResult=null;
     try{
       const cr=await callClaudeAPI(claudeInput,diagramListStr);
       if(cr?.success&&cr.result){claudeResult=cr.result;claudeResult._tokens=cr.tokens||0;
         setStep("claude","done",100,`도표 ${cr.result.diagram_id||'?'} · 과실 ${cr.result.fault_a??'?'}:${cr.result.fault_b??'?'}`);
-      }else{setStep("claude","done",100,"Claude 응답 실패 → 엔진 폴백")}
+      }else{setStep("claude","done",100,"Claude 실패 → 엔진 폴백")}
     }catch(e){setStep("claude","error",null,"Claude API 오류 → 엔진 폴백")}
     await new Promise(r=>setTimeout(r,200));
 
-    // ═══ Step 7: 엔진 비교분석 (SECONDARY) ═══
-    setStep("match","running",40,`${DB.length}개 도표 패턴매칭 (비교용)...`);
+    // ═══ Step 7: 엔진 비교분석 ═══
+    setStep("match","running",40,`${DB.length}개 도표 패턴매칭...`);
     await new Promise(r=>setTimeout(r,300));
     const m=matchDiagram(combined);
     if(m){setStep("match","done",100,`엔진: ${m.match.id} (${m.matchScore}점)`)}
@@ -1487,7 +1487,7 @@ function App(){
     await new Promise(r=>setTimeout(r,200));
     const sim=findSimilar(combined,kb);
     const allSimilar=[...sim,...dbResults.filter(d=>!sim.some(s=>s.id===d.id))].sort((a,b)=>(b.matchScore||0)-(a.matchScore||0)).slice(0,10);
-    setStep("similar","done",100,allSimilar.length?`${allSimilar.length}건 (로컬${sim.length}+DB${dbResults.length})`:"없음");
+    setStep("similar","done",100,allSimilar.length?`${allSimilar.length}건`:"없음");
     await new Promise(r=>setTimeout(r,150));
 
     // ═══ Step 9: 결과 산출 ═══
@@ -1555,67 +1555,6 @@ function App(){
     }
 
     setStep("result","done",100,`${primarySource==='claude'?'🤖':'📋'} ${primaryDiagram.id} · ${primaryFaultA}:${primaryFaultB}`);
-    setRunning(false);setPage("result");
-    }
-    setStep("match","done",100,`${m.match.id} · ${m.match.t} (점수:${m.matchScore})`);
-    await new Promise(r=>setTimeout(r,200));
-
-    // Step 6: Similar (로컬 KB + Supabase 69,370건)
-    setStep("similar","running",30,"유사 판례 검색...");
-    await new Promise(r=>setTimeout(r,200));
-    const sim=findSimilar(combined,kb);
-    setStep("similar","running",60,"Supabase 판례 DB 검색...");
-    const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
-    const dbResults=await searchPrecedentsDB(combined,accType,10);
-    const allSimilar=[...sim,...dbResults.filter(d=>!sim.some(s=>s.id===d.id))].sort((a,b)=>(b.matchScore||0)-(a.matchScore||0)).slice(0,10);
-    setStep("similar","done",100,allSimilar.length?`${allSimilar.length}건 (로컬${sim.length}+DB${dbResults.length})`:"없음");
-    await new Promise(r=>setTimeout(r,150));
-
-    // Step 7: Result
-    setStep("result","running",60,"과실비율 산출...");
-    await new Promise(r=>setTimeout(r,400));
-    const mods=detectMods(combined);
-    const{fA,fB}=calcFault(m.match,mods);
-    const isPed=m.match.bf.p!==undefined;
-    const resultObj={diagram:m.match,confidence:m.confidence,matchScore:m.matchScore,alts:m.alts,faultA:fA,faultB:fB,
-      labelA:m.match.la||(isPed?"차량":"A"),labelB:m.match.lb||(isPed?"보행자":"B"),
-      mods,appliedMods:(m.match.mods||[]).map(mod=>({...mod,applied:mods.some(dm=>mod.n.includes(dm)||dm.includes(mod.n))})),
-      laws:getLaws(m.match,combined),similar:allSimilar,dbPrecedents:dbResults,text:combined};
-    resultObj.analysis=generateAnalysis(resultObj,safeInput);
-    setResult(resultObj);
-    setSavedId(null);setFbSent(false);
-    // ═══ 서버 자동 저장 ═══
-    saveToServer({
-      input_text:safeInput,input_type:hasPDF?'pdf':hasImage?'ocr':hasVideo?'video':'text',
-      has_pdf:hasPDF,has_image:hasImage,has_video:hasVideo,
-      pdf_text:pdfText,ocr_text:ocrResult?.text||'',video_env:vidEnv,
-      diagram_id:m.match.id,diagram_title:m.match.t,category:m.match.cat,subcategory:m.match.sub,
-      confidence:m.confidence,match_score:m.matchScore,alt_diagrams:m.alts,
-      fault_a:fA,fault_b:fB,label_a:resultObj.labelA,label_b:resultObj.labelB,
-      base_fault_a:isPed?m.match.bf.c:m.match.bf.a,base_fault_b:isPed?m.match.bf.p:m.match.bf.b,
-      detected_mods:mods,applied_mods:resultObj.appliedMods,laws:resultObj.laws.map(l=>({a:l.a,d:l.d})),
-      analysis_text:resultObj.analysis,llm_used:false,
-      gpu_used:!!gpuResult,gpu_result:gpuResult?.summary||null
-    }).then(res=>{if(res?.id)setSavedId(res.id);else setSavedId('local')}).catch(()=>{setSavedId('local')});
-    // ═══ Claude API 보조 분석 (백그라운드) ═══
-    setLlmResult(null);setLlmLoading(true);
-    const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
-    let claudeInput=combined;
-    if(gpuResult?.for_claude)claudeInput+="\n\n"+gpuResult.for_claude;
-    if(dbResults.length>0)claudeInput+="\n\n## 유사 판례 DB 검색 결과\n"+dbResults.slice(0,5).map(d=>`- ${d.case_number||''} (${d.court||''}) 과실${d.fault_ratio||'?'} ${d.categories||''} ${(d.summary||'').slice(0,100)}`).join('\n');
-    callClaudeAPI(claudeInput,diagramListStr).then(cr=>{
-      if(cr?.success&&cr.result){setLlmResult(cr.result);setLlmLoading(false);
-        // ═══ Claude 분석 결과 DB 업데이트 (학습 데이터) ═══
-        const llmData={llm_response:cr.result,llm_used:true,llm_diagram_id:cr.result.diagram_id||null,
-          llm_fault_a:cr.result.fault_a,llm_fault_b:cr.result.fault_b,llm_confidence:cr.result.confidence||null,
-          llm_reasoning:cr.result.reasoning||'',llm_analysis:cr.result.analysis||'',
-          llm_modifiers:cr.result.detected_modifiers||[],llm_tokens:cr.tokens||0,
-          engine_diagram_id:m.match.id};
-        fetch(API_BASE+'/api/save',{method:'PATCH',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({session_id:SESSION_ID,llm_data:llmData})}).catch(()=>{});
-      } else setLlmLoading(false);
-    }).catch(()=>{setLlmLoading(false);setLlmResult({error:true,raw:'API 연결 실패'})});
-    setStep("result","done",100,`${m.match.id} · ${fA}:${fB}`);
     setRunning(false);setPage("result");
   },[input,files,vidSrc,kb,running]);
 
@@ -2002,16 +1941,16 @@ function App(){
             <p style={{fontSize:10,color:C.t3,marginTop:6}}>전문 감정서 형식으로 출력 · 인쇄/PDF 저장 가능</p>
           </div>
 
-          {/* ═══ v8.0: Claude 추론 + 엔진 비교 패널 ═══ */}
+          {/* v8.0 Claude+엔진 비교 */}
           {r.primarySource&&<div style={{background:r.primarySource==='claude'?"rgba(99,102,241,.04)":"rgba(59,130,246,.04)",border:`1px solid ${r.primarySource==='claude'?C.violet:C.blue}15`,borderRadius:14,padding:14,marginBottom:10}}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
               <span style={{fontSize:16}}>{r.primarySource==='claude'?'🤖':'📋'}</span>
               <div>
                 <div style={{fontSize:12,fontWeight:800,color:r.primarySource==='claude'?C.violet:C.blue}}>
-                  {r.primarySource==='claude'?'Claude AI 1차 추론 결과':'패턴매칭 엔진 결과 (Claude 폴백)'}
+                  {r.primarySource==='claude'?'Claude AI 1차 추론 결과':'엔진 결과 (Claude 폴백)'}
                 </div>
                 <div style={{fontSize:9,color:C.t3}}>
-                  {r.primarySource==='claude'?'Claude가 도표 선택 + 과실비율 산정':'Claude 실패 → 엔진 분석'}
+                  {r.primarySource==='claude'?'Claude 도표선택+과실산정 · 엔진은 비교학습':'Claude 실패 → 엔진 분석'}
                 </div>
               </div>
             </div>
@@ -2021,7 +1960,7 @@ function App(){
                 <p style={{fontSize:11,color:C.t2,lineHeight:1.8,whiteSpace:"pre-line"}}>{r.claudeResult.reasoning}</p>
               </div>}
               {r.claudeResult.analysis&&<div style={{padding:10,borderRadius:8,background:"rgba(16,185,129,.03)",border:`1px solid ${C.emerald}10`,marginBottom:8}}>
-                <div style={{fontSize:10,fontWeight:700,color:C.emerald,marginBottom:4}}>📝 분석 의견</div>
+                <div style={{fontSize:10,fontWeight:700,color:C.emerald,marginBottom:4}}>📝 분석</div>
                 <p style={{fontSize:11,color:C.t2,lineHeight:1.8,whiteSpace:"pre-line"}}>{r.claudeResult.analysis}</p>
               </div>}
               {r.claudeResult.detected_modifiers?.length>0&&<div style={{fontSize:10,color:C.t2,marginBottom:6}}>
@@ -2029,7 +1968,7 @@ function App(){
               </div>}
             </div>}
             {r.engineMatch&&<div style={{background:"rgba(6,9,16,.4)",borderRadius:10,padding:10,border:`1px solid ${C.b1}`}}>
-              <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:8}}>📊 엔진 vs Claude 비교</div>
+              <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:8}}>📊 엔진 vs Claude</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:10}}>
                 <div style={{fontWeight:700,color:C.t3,padding:"4px 6px"}}>항목</div>
                 <div style={{fontWeight:700,color:C.blue,padding:"4px 6px",textAlign:"center"}}>📋 엔진</div>
@@ -2043,7 +1982,7 @@ function App(){
                 <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",fontFamily:"var(--mono)",borderTop:`1px solid ${C.b1}`}}>{r.engineFault?.a}:{r.engineFault?.b}</div>
                 <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",fontFamily:"var(--mono)",fontWeight:700,borderTop:`1px solid ${C.b1}`}}>{r.faultA}:{r.faultB}</div>
               </div>
-              {r.diagramMatch==='불일치'&&<div style={{marginTop:6,padding:6,background:`${C.amber}06`,borderRadius:6,fontSize:10,color:C.amber}}>⚠️ 도표 불일치 — 학습 데이터 축적</div>}
+              {r.diagramMatch==='불일치'&&<div style={{marginTop:6,padding:6,background:`${C.amber}06`,borderRadius:6,fontSize:10,color:C.amber}}>⚠️ 도표 불일치 — 학습 축적</div>}
               {r.diagramMatch==='일치'&&<div style={{marginTop:6,padding:6,background:`${C.emerald}06`,borderRadius:6,fontSize:10,color:C.emerald}}>✅ 도표 일치 — 높은 신뢰도</div>}
             </div>}
           </div>}
