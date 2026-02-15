@@ -1188,26 +1188,26 @@ function AgentPipeline({stepStates}){
   return<div style={{background:"rgba(8,12,24,.6)",border:"1px solid rgba(99,102,241,.1)",borderRadius:12,padding:"10px 14px",marginBottom:14}}>
     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
       {isRunning?<div style={{width:14,height:14,border:"2px solid #6366f140",borderTopColor:"#6366f1",borderRadius:7,animation:"spin .7s linear infinite",flexShrink:0}}/>:<div style={{width:6,height:6,borderRadius:3,background:"#1e293b",flexShrink:0}}/>}
-      <span style={{fontSize:10,fontWeight:700,color:isRunning?"#a5b4fc":"#64748b",letterSpacing:.5}}>ATLAS AGENT</span>
-      {activeStep&&<span style={{fontSize:9,color:"#818cf8",fontWeight:600}}>{activeStep.label}</span>}
+      <span style={{fontSize:12,fontWeight:800,color:isRunning?"#c7d2fe":"#94a3b8",letterSpacing:.5}}>ATLAS AGENT</span>
+      {activeStep&&<span style={{fontSize:11,color:"#a5b4fc",fontWeight:700}}>{activeStep.label}</span>}
       <span style={{fontSize:9,color:"#475569",marginLeft:"auto"}}>v8.5</span>
     </div>
     <div style={{display:"flex",gap:2,alignItems:"center"}}>
       {STEPS.map((step,i)=>{const st=stepStates[step.id]||{status:'idle'};const isRun=st.status==='running',isDone=st.status==='done',isErr=st.status==='error';
       return<React.Fragment key={step.id}>
         <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}} title={`${step.label}: ${st.msg||step.desc}`}>
-          <div style={{width:26,height:26,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,
+          <div style={{width:30,height:30,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,
             background:isDone?"rgba(16,185,129,.12)":isErr?"rgba(239,68,68,.1)":isRun?"rgba(99,102,241,.15)":"rgba(15,23,42,.4)",
             border:`1.5px solid ${isDone?"rgba(16,185,129,.3)":isErr?"rgba(239,68,68,.3)":isRun?"rgba(99,102,241,.4)":"rgba(30,41,59,.3)"}`,
             transition:"all .3s",boxShadow:isRun?"0 0 8px rgba(99,102,241,.3)":"none"}}>
             {isRun?<div style={{width:10,height:10,border:"2px solid #6366f140",borderTopColor:"#818cf8",borderRadius:5,animation:"spin .6s linear infinite"}}/>:isDone?"✅":isErr?"❌":step.icon}
           </div>
-          <div style={{fontSize:7.5,fontWeight:isDone?600:isRun?700:400,color:isDone?"#10b981":isErr?"#ef4444":isRun?"#c7d2fe":"#475569",textAlign:"center",lineHeight:1.1}}>{step.label}</div>
+          <div style={{fontSize:9,fontWeight:isDone?700:isRun?800:500,color:isDone?"#10b981":isErr?"#ef4444":isRun?"#c7d2fe":"#475569",textAlign:"center",lineHeight:1.1}}>{step.label}</div>
         </div>
         {i<STEPS.length-1&&<div style={{width:10,height:1.5,background:isDone?"#10b98140":"#1e293b",borderRadius:1,flexShrink:0,marginTop:-8}}/>}
       </React.Fragment>})}
     </div>
-    {activeStep&&stepStates[activeStep.id]?.msg&&<div style={{marginTop:6,fontSize:9,color:"#818cf8",textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stepStates[activeStep.id].msg}</div>}
+    {activeStep&&stepStates[activeStep.id]?.msg&&<div style={{marginTop:6,fontSize:10,color:"#a5b4fc",fontWeight:600,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stepStates[activeStep.id].msg}</div>}
   </div>;
 }
 
@@ -1920,19 +1920,20 @@ function App(){
             </div>)}
           </div>}
 
-          {r.appliedMods?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🔧 수정요소</div>
-            {r.appliedMods.map((m,i)=><div key={i} style={{padding:"4px 8px",borderRadius:7,marginBottom:2,background:m.applied?`${C.blue}06`:"rgba(15,23,42,.3)",fontSize:11}}>
-              {m.applied?"✅":"⬜"} {m.n} <span style={{fontFamily:"var(--mono)",color:m.v>0?"#f87171":"#60a5fa"}}>{m.v>0?"+":""}{m.v}%</span>
-            </div>)}
-          </div>}
-
-          {r.laws?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>📖 관련 법규</div>
-            {r.laws.map((l,i)=><div key={i} style={{padding:"5px 8px",borderRadius:7,background:"rgba(6,9,16,.3)",marginBottom:2,borderLeft:`3px solid ${C.indigo}`}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#a5b4fc"}}>{l.a}</div>
-              <div style={{fontSize:10,color:C.t2}}>{l.d}</div>
-            </div>)}
+          {(r.appliedMods?.length>0||r.laws?.length>0)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            {r.appliedMods?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🔧 수정요소</div>
+              {r.appliedMods.map((m,i)=><div key={i} style={{padding:"4px 8px",borderRadius:7,marginBottom:2,background:m.applied?`${C.blue}06`:"rgba(15,23,42,.3)",fontSize:11}}>
+                {m.applied?"✅":"⬜"} {m.n} <span style={{fontFamily:"var(--mono)",color:m.v>0?"#f87171":"#60a5fa"}}>{m.v>0?"+":""}{m.v}%</span>
+              </div>)}
+            </div>}
+            {r.laws?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>📖 관련 법규</div>
+              {r.laws.map((l,i)=><div key={i} style={{padding:"4px 7px",borderRadius:7,background:"rgba(6,9,16,.3)",marginBottom:2,borderLeft:`3px solid ${C.indigo}`}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#a5b4fc"}}>{l.a}</div>
+                <div style={{fontSize:9,color:C.t2}}>{l.d}</div>
+              </div>)}
+            </div>}
           </div>}
 
           <div style={{textAlign:"center",marginBottom:14}}>
@@ -1998,14 +1999,16 @@ function App(){
           {savedId&&savedId!=='local'&&<div style={{background:C.card,border:`1px solid ${C.emerald}15`,borderRadius:14,padding:14,marginBottom:10,textAlign:"center"}}>
             <div style={{fontSize:11,fontWeight:700,color:C.emerald,marginBottom:8}}>✅ 분석 결과가 서버에 저장되었습니다</div>
             {!fbSent?<div>
-              <div style={{fontSize:10,color:C.t3,marginBottom:8}}>이 분석 결과가 정확한가요? (학습에 반영됩니다)</div>
-              <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-                <button onClick={()=>{sendFeedback(savedId,true,'정확함');setFbSent('correct')}} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"rgba(16,185,129,.12)",color:C.emerald,fontSize:12,fontWeight:700,cursor:"pointer"}}>👍 정확해요</button>
-                <button onClick={()=>{sendFeedback(savedId,false,'부정확');setFbSent('wrong')}} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"rgba(239,68,68,.08)",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>👎 틀려요</button>
+              <div style={{fontSize:10,color:C.t3,marginBottom:8}}>분석 결과를 평가해주세요 (학습에 반영됩니다)</div>
+              <div style={{display:"flex",gap:6,justifyContent:"center"}}>
+                <button onClick={()=>{sendFeedback(savedId,true,'정확');setFbSent('정확')}} style={{padding:"8px 16px",borderRadius:8,border:"1px solid rgba(16,185,129,.3)",background:"rgba(16,185,129,.08)",color:"#10b981",fontSize:12,fontWeight:700,cursor:"pointer"}}>✅ 정확</button>
+                <button onClick={()=>{sendFeedback(savedId,true,'부합');setFbSent('부합')}} style={{padding:"8px 16px",borderRadius:8,border:"1px solid rgba(245,158,11,.3)",background:"rgba(245,158,11,.08)",color:"#f59e0b",fontSize:12,fontWeight:700,cursor:"pointer"}}>🟡 부합</button>
+                <button onClick={()=>{sendFeedback(savedId,false,'검토');setFbSent('검토')}} style={{padding:"8px 16px",borderRadius:8,border:"1px solid rgba(249,115,22,.3)",background:"rgba(249,115,22,.08)",color:"#f97316",fontSize:12,fontWeight:700,cursor:"pointer"}}>🟠 검토</button>
+                <button onClick={()=>{sendFeedback(savedId,false,'틀림');setFbSent('틀림')}} style={{padding:"8px 16px",borderRadius:8,border:"1px solid rgba(239,68,68,.3)",background:"rgba(239,68,68,.08)",color:"#ef4444",fontSize:12,fontWeight:700,cursor:"pointer"}}>❌ 틀림</button>
               </div>
             </div>:
-            <div style={{fontSize:11,color:fbSent==='correct'?C.emerald:C.amber,fontWeight:600}}>
-              {fbSent==='correct'?'✅ 감사합니다! 정확도 향상에 반영됩니다.':'📝 피드백 감사합니다. 개선에 활용하겠습니다.'}
+            <div style={{fontSize:11,color:fbSent==='정확'?"#10b981":fbSent==='부합'?"#f59e0b":fbSent==='검토'?"#f97316":"#ef4444",fontWeight:600}}>
+              {'평가: '+fbSent+' — 감사합니다! 학습에 반영됩니다.'}
             </div>}
           </div>}
           {!savedId&&<div style={{textAlign:"center",marginBottom:10}}><span style={{fontSize:9,color:C.t3}}>💾 서버 저장 중...</span></div>}
@@ -2026,9 +2029,9 @@ function App(){
     <div style={{padding:"10px 16px",background:"rgba(6,9,16,.9)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,zIndex:50}}>
       <div style={{...mx,display:"flex",alignItems:"center",gap:8,padding:0}}>
         <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
-          <svg width="22" height="22" viewBox="0 0 40 40"><path d="M8 28L20 4l12 24H28l-8-16-8 16z" fill="#3b82f6"/><path d="M4 32l8-16 8 16z" fill="#6366f1" opacity=".7"/></svg>
+          <svg width="28" height="28" viewBox="0 0 40 40"><path d="M8 28L20 4l12 24H28l-8-16-8 16z" fill="#3b82f6"/><path d="M4 32l8-16 8 16z" fill="#6366f1" opacity=".7"/></svg>
         </div>
-        <div style={{flex:1}}><div style={{fontWeight:900,fontSize:13,letterSpacing:-.5}}>MD Labs <span style={{fontWeight:600,fontSize:10,color:C.blue}}>ATLAS Pro</span></div><div style={{fontSize:7.5,color:C.t3,letterSpacing:.5}}>AI Traffic Legal Analysis System</div></div>
+        <div style={{flex:1}}><div style={{fontWeight:900,fontSize:15,letterSpacing:-.3}}>MD Labs <span style={{fontWeight:700,fontSize:12,color:C.blue}}>ATLAS Pro</span></div><div style={{fontSize:9,color:C.t2,letterSpacing:.8,fontWeight:500}}>AI Traffic Legal Analysis System</div></div>
         <div style={{display:"flex",alignItems:"center",gap:4}}>
           <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>{DB.length}도표 · 69K판례</span>
           <div style={{display:"flex",borderRadius:4,overflow:"hidden",border:`1px solid ${C.b1}`}}>
@@ -2075,18 +2078,20 @@ function App(){
       </div>}
 
       <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:18,padding:18,marginBottom:12}}>
-        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:12}}><span style={{fontSize:14}}>📝</span><span style={{fontSize:13,fontWeight:800}}>사고 내용 기록</span></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:12}}><span style={{fontSize:15}}>📝</span><span style={{fontSize:14,fontWeight:800}}>사고 내용 기록</span></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
           <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차종 및 연식</div>
-            <input placeholder="예: 현대 아이오닉 5 (2023)" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
+            <input placeholder="예: 현대 아이오닉 5 (2023)" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
           <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차량 번호</div>
-            <input placeholder="예: 12가 3456" style={{width:"100%",padding:"8px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
+            <input placeholder="예: 12가 3456" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
+          <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차대번호 (VIN) <span style={{fontSize:8,color:C.t3}}>(선택)</span></div>
+            <input placeholder="영문/숫자 혼합 17자리" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none",fontFamily:"var(--mono)"}}/></div>
         </div>
         <div style={{marginBottom:10}}>
           <div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>사고 내용 설명 <span style={{color:C.red}}>*</span></div>
           <textarea ref={taRef} value={input} onChange={e=>setInput(e.target.value)}
-            placeholder={"1) 사고 발생 시간:\n2) 사고 발생 장소:\n3) 보험 가입 여부:\n4) 경찰 신고 여부:\n5) 사고 내용 설명:"}
-            style={{width:"100%",padding:12,borderRadius:12,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:12,outline:"none",resize:"vertical",minHeight:120,lineHeight:1.8}}/>
+            placeholder={"1) 사고 발생 시간:\n2) 사고 발생 장소:\n3) 보험 가입 여부:\n4) 경찰 신고 여부:\n5) 사고 내용 설명:\n\n예: 편도 2차로에서 1차로 직진 중 2차로 차량이 깜빡이 없이 차선변경하여 측면 충돌"}
+            style={{width:"100%",padding:12,borderRadius:12,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:12,outline:"none",resize:"vertical",minHeight:140,lineHeight:1.8,userSelect:"text",WebkitUserSelect:"text"}}/>
           <div style={{fontSize:9.5,color:C.t3,marginTop:4}}>{input.length}자{input.length>=5&&<span style={{color:C.emerald}}> ✓</span>}</div>
         </div>
       </div>
