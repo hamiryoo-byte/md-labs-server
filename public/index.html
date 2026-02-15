@@ -1949,9 +1949,6 @@ function App(){
                 <div style={{fontSize:12,fontWeight:800,color:r.primarySource==='claude'?C.violet:C.blue}}>
                   {r.primarySource==='claude'?'Claude AI 1차 추론 결과':'엔진 결과 (Claude 폴백)'}
                 </div>
-                <div style={{fontSize:9,color:C.t3}}>
-                  {r.primarySource==='claude'?'Claude 도표선택+과실산정 · 엔진은 비교학습':'Claude 실패 → 엔진 분석'}
-                </div>
               </div>
             </div>
             {r.claudeResult&&<div style={{marginBottom:10}}>
@@ -1962,9 +1959,6 @@ function App(){
               {r.claudeResult.analysis&&<div style={{padding:10,borderRadius:8,background:"rgba(16,185,129,.03)",border:`1px solid ${C.emerald}10`,marginBottom:8}}>
                 <div style={{fontSize:10,fontWeight:700,color:C.emerald,marginBottom:4}}>📝 분석</div>
                 <p style={{fontSize:11,color:C.t2,lineHeight:1.8,whiteSpace:"pre-line"}}>{r.claudeResult.analysis}</p>
-              </div>}
-              {r.claudeResult.detected_modifiers?.length>0&&<div style={{fontSize:10,color:C.t2,marginBottom:6}}>
-                <span style={{fontWeight:700,color:C.amber}}>수정요소:</span> {r.claudeResult.detected_modifiers.join(', ')}
               </div>}
             </div>}
             {r.engineMatch&&<div style={{background:"rgba(6,9,16,.4)",borderRadius:10,padding:10,border:`1px solid ${C.b1}`}}>
@@ -1983,7 +1977,7 @@ function App(){
                 <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",fontFamily:"var(--mono)",fontWeight:700,borderTop:`1px solid ${C.b1}`}}>{r.faultA}:{r.faultB}</div>
               </div>
               {r.diagramMatch==='불일치'&&<div style={{marginTop:6,padding:6,background:`${C.amber}06`,borderRadius:6,fontSize:10,color:C.amber}}>⚠️ 도표 불일치 — 학습 축적</div>}
-              {r.diagramMatch==='일치'&&<div style={{marginTop:6,padding:6,background:`${C.emerald}06`,borderRadius:6,fontSize:10,color:C.emerald}}>✅ 도표 일치 — 높은 신뢰도</div>}
+              {r.diagramMatch==='일치'&&<div style={{marginTop:6,padding:6,background:`${C.emerald}06`,borderRadius:6,fontSize:10,color:C.emerald}}>✅ 도표 일치</div>}
             </div>}
           </div>}
 
