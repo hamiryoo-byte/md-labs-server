@@ -53,7 +53,7 @@ module.exports = async (req, res) => {
         llm_analysis:    (llm_data.llm_analysis || '').slice(0, 5000),
         llm_modifiers:   llm_data.llm_modifiers || [],
         llm_tokens:      llm_data.llm_tokens || 0,
-        matches_engine:  llm_data.llm_diagram_id === llm_data.engine_diagram_id,
+        matches_engine:  String(llm_data.llm_diagram_id || '') === String(llm_data.engine_diagram_id || ''),
       };
 
       // ★ 핵심 수정: 에러 로깅 추가 (기존: .catch(() => {}))
