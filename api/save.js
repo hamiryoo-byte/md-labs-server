@@ -22,6 +22,7 @@ module.exports = async (req, res) => {
         .single();
 
       if (findErr || !latest) {
+        console.error('PATCH: 세션 조회 실패:', findErr?.message, 'session_id:', session_id);
         return res.status(404).json({ error: '해당 세션의 분석 데이터 없음' });
       }
 
@@ -35,7 +36,10 @@ module.exports = async (req, res) => {
         .update(updateRecord)
         .eq('id', latest.id);
 
-      if (updateErr) throw updateErr;
+      if (updateErr) {
+        console.error('PATCH: analyses 업데이트 실패:', updateErr.message);
+        throw updateErr;
+      }
 
       // ═══ llm_analyses 테이블에 별도 저장 (학습 데이터) ═══
       const llmRecord = {
@@ -52,11 +56,26 @@ module.exports = async (req, res) => {
         matches_engine:  llm_data.llm_diagram_id === llm_data.engine_diagram_id,
       };
 
-      await supabase.from('llm_analyses').insert(llmRecord).catch(() => {});
+      // ★ 핵심 수정: 에러 로깅 추가 (기존: .catch(() => {}))
+      const { data: llmInserted, error: llmErr } = await supabase
+        .from('llm_analyses')
+        .insert(llmRecord)
+        .select('id')
+        .single();
+
+      if (llmErr) {
+        console.error('PATCH: llm_analyses INSERT 실패:', llmErr.message, llmErr.details, llmErr.hint);
+        console.error('PATCH: llmRecord:', JSON.stringify(llmRecord));
+        // 학습 데이터 저장 실패해도 응답은 성공으로 (분석 자체는 저장됨)
+      } else {
+        console.log('PATCH: llm_analyses 저장 성공, id:', llmInserted?.id, 'matches_engine:', llmRecord.matches_engine);
+      }
 
       return res.status(200).json({
         success: true,
         id: latest.id,
+        llm_saved: !llmErr,
+        llm_error: llmErr?.message || null,
         message: 'Claude AI 분석 결과 저장 완료'
       });
 
@@ -78,7 +97,7 @@ module.exports = async (req, res) => {
 
     // IP 해시 (통계용 — 원본 IP 저장 안함)
     const ip = req.headers['x-forwarded-for'] || req.connection?.remoteAddress || '';
-    const ipHash = crypto.createHash('sha256').update(ip + process.env.SALT || 'mdlabs').digest('hex').slice(0, 16);
+    const ipHash = crypto.createHash('sha256').update(ip + (process.env.SALT || 'mdlabs')).digest('hex').slice(0, 16);
 
     const record = {
       input_text:    (data.input_text || '').slice(0, 10000),
