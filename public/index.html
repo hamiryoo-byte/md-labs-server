@@ -1172,8 +1172,7 @@ function findSimilar(text,kb,max=5){
 
 const STEPS=[
   {id:"upload",icon:"📎",label:"자료 입력",desc:"텍스트·파일 확인"},
-  {id:"pdf",icon:"📄",label:"PDF 분석",desc:"PDF 텍스트 추출"},
-  {id:"ocr",icon:"🔍",label:"OCR 분석",desc:"이미지→텍스트 변환"},
+  {id:"scan",icon:"📄",label:"자료분석",desc:"PDF·이미지 텍스트 추출"},
   {id:"video",icon:"🎬",label:"영상 환경분석",desc:"주야간·신호 추출"},
   {id:"gpu",icon:"🖥️",label:"GPU 객체탐지",desc:"차량·보행자·신호 AI 탐지"},
   {id:"claude",icon:"🤖",label:"ATLAS AI 추론",desc:"1차 분석 · 도표매칭 · 과실산정"},
@@ -1336,41 +1335,41 @@ function App(){
 
     // Step 2: PDF
     if(hasPDF){
-      setStep("pdf","running",0,"PDF 텍스트 직접 추출 시작...");
+      setStep("scan","running",0,"PDF 텍스트 직접 추출 시작...");
       const pf=files.find(f=>f.pdf===true||checkPDF(f.file));
       try{
-        const pr=await extractPDFText(pf.file,msg=>setStep("pdf","running",null,msg),pct=>setStep("pdf","running",pct));
+        const pr=await extractPDFText(pf.file,msg=>setStep("scan","running",null,msg),pct=>setStep("scan","running",pct));
         if(pr.text&&pr.text.length>20){
           setPdfText(pr.text);combined=combined?combined+"\n\n[PDF 추출]\n"+pr.text:pr.text;
-          setStep("pdf","done",100,`${pr.text.length}자 추출 (${pr.extracted}/${pr.totalPages}페이지)`);
+          setStep("scan","done",100,`${pr.text.length}자 추출 (${pr.extracted}/${pr.totalPages}페이지)`);
         }else{
-          setStep("pdf","running",50,"텍스트 없음 → 이미지 OCR 시도...");
+          setStep("scan","running",50,"텍스트 없음 → 이미지 OCR 시도...");
           try{
-            const imgs=await renderPDFToImages(pf.file,msg=>setStep("pdf","running",null,msg),pct=>setStep("pdf","running",50+pct*0.2));
+            const imgs=await renderPDFToImages(pf.file,msg=>setStep("scan","running",null,msg),pct=>setStep("scan","running",50+pct*0.2));
             if(imgs.length>0&&await ensureTesseract()){
               let ocrText='';
-              for(let i=0;i<imgs.length;i++){setStep("pdf","running",70+Math.round((i/imgs.length)*25),`페이지 ${i+1} OCR...`);
+              for(let i=0;i<imgs.length;i++){setStep("scan","running",70+Math.round((i/imgs.length)*25),`페이지 ${i+1} OCR...`);
                 try{const r=await runOCR(imgs[i],null,null);if(r.text)ocrText+=`\n[p${i+1}] ${r.text}`}catch(e){}}
-              if(ocrText.length>10){setPdfText(ocrText);combined+="\n\n[PDF OCR]\n"+ocrText;setStep("pdf","done",100,`OCR ${ocrText.length}자 추출`)}
-              else setStep("pdf","done",100,"텍스트 추출 실패");
-            }else{setStep("pdf","done",100,"이미지 PDF — OCR 불가")}
-          }catch(e2){setStep("pdf","error",null,e2.message)}
+              if(ocrText.length>10){setPdfText(ocrText);combined+="\n\n[PDF OCR]\n"+ocrText;setStep("scan","done",100,`OCR ${ocrText.length}자 추출`)}
+              else setStep("scan","done",100,"텍스트 추출 실패");
+            }else{setStep("scan","done",100,"이미지 PDF — OCR 불가")}
+          }catch(e2){setStep("scan","error",null,e2.message)}
         }
-      }catch(e){setStep("pdf","error",null,e.message)}
+      }catch(e){setStep("scan","error",null,e.message)}
       await new Promise(r=>setTimeout(r,200));
-    }else{setStep("pdf","skip",null,"PDF 없음")}
+    }else{setStep("scan","skip",null,"PDF 없음")}
 
     // Step 3: OCR
     if(hasImage){
-      setStep("ocr","running",0,"이미지 OCR...");
+      setStep("scan","running",0,"이미지 OCR...");
       const img=files.find(f=>f.type?.startsWith('image/'));
       try{
-        const res=await runOCR(img.file,msg=>setStep("ocr","running",null,msg),pct=>setStep("ocr","running",pct));
-        if(res.text?.length>3){setOcrResult(res);combined+="\n\n[OCR]\n"+res.text;setStep("ocr","done",100,`${res.text.length}자 · 신뢰도${res.confidence}%`)}
-        else setStep("ocr","done",100,"텍스트 없음");
-      }catch(e){setStep("ocr","error",null,e.message)}
+        const res=await runOCR(img.file,msg=>setStep("scan","running",null,msg),pct=>setStep("scan","running",pct));
+        if(res.text?.length>3){setOcrResult(res);combined+="\n\n[OCR]\n"+res.text;setStep("scan","done",100,`${res.text.length}자 · 신뢰도${res.confidence}%`)}
+        else setStep("scan","done",100,"텍스트 없음");
+      }catch(e){setStep("scan","error",null,e.message)}
       await new Promise(r=>setTimeout(r,200));
-    }else{setStep("ocr","skip",null,"이미지 없음")}
+    }else{setStep("scan","skip",null,"이미지 없음")}
 
     // Step 4: Video
     if(hasVideo&&vidRef.current){
