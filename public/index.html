@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
-<title>MD Labs ATLAS Pro — AI Traffic Legal Analysis System</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>MD Labs — AI 과실비율 분석 ATLAS Pro</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -20,7 +20,7 @@ body{background:var(--bg);color:var(--t1);font-family:var(--sans);-webkit-font-s
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-textarea,input,button,select{font-family:var(--sans)}*{-webkit-user-select:text!important;user-select:text!important}input::placeholder,textarea::placeholder{color:rgba(148,163,184,.6)!important;-webkit-text-fill-color:rgba(148,163,184,.6)!important}
+textarea,input,button,select{font-family:var(--sans)}
 .drop-active{border-color:var(--blue)!important;background:rgba(59,130,246,.08)!important}
 </style>
 </head>
@@ -1176,38 +1176,36 @@ const STEPS=[
   {id:"ocr",icon:"🔍",label:"OCR 분석",desc:"이미지→텍스트 변환"},
   {id:"video",icon:"🎬",label:"영상 환경분석",desc:"주야간·신호 추출"},
   {id:"gpu",icon:"🖥️",label:"GPU 객체탐지",desc:"차량·보행자·신호 AI 탐지"},
-  {id:"claude",icon:"🤖",label:"ATLAS AI 추론",desc:"1차 분석 · 도표매칭 · 과실산정"},
-  {id:"match",icon:"📋",label:"엔진 비교분석",desc:"패턴매칭 검증 · 학습데이터 축적"},
+  {id:"match",icon:"📋",label:"도표 매칭",desc:"과실비율 인정기준 검색"},
   {id:"similar",icon:"🧠",label:"판례 검색",desc:"유사 판례 비교"},
   {id:"result",icon:"⚖️",label:"결과 산출",desc:"과실비율+법적근거"},
 ];
 
 function AgentPipeline({stepStates}){
-  const isRunning=Object.values(stepStates).some(s=>s.status==='running');
-  const activeStep=STEPS.find(s=>(stepStates[s.id]||{}).status==='running');
-  return<div style={{background:"rgba(8,12,24,.6)",border:"1px solid rgba(99,102,241,.1)",borderRadius:12,padding:"10px 14px",marginBottom:14}}>
-    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-      {isRunning?<div style={{width:14,height:14,border:"2px solid #6366f140",borderTopColor:"#6366f1",borderRadius:7,animation:"spin .7s linear infinite",flexShrink:0}}/>:<div style={{width:6,height:6,borderRadius:3,background:"#1e293b",flexShrink:0}}/>}
-      <span style={{fontSize:12,fontWeight:800,color:isRunning?"#c7d2fe":"#94a3b8",letterSpacing:.5}}>ATLAS AGENT</span>
-      {activeStep&&<span style={{fontSize:11,color:"#a5b4fc",fontWeight:700}}>{activeStep.label}</span>}
-      <span style={{fontSize:9,color:"#475569",marginLeft:"auto"}}>v8.5</span>
+  return<div style={{background:"rgba(8,12,24,.6)",border:"1px solid rgba(99,102,241,.1)",borderRadius:16,padding:"14px 16px",marginBottom:14}}>
+    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
+      <div style={{width:7,height:7,borderRadius:4,background:Object.values(stepStates).some(s=>s.status==='running')?"#6366f1":"#1e293b",animation:Object.values(stepStates).some(s=>s.status==='running')?"pulse 1.2s infinite":"none"}}/>
+      <span style={{fontSize:10,fontWeight:700,color:"#94a3b8",letterSpacing:1}}>AI AGENT PIPELINE</span>
+      <span style={{fontSize:9,color:"#475569",marginLeft:"auto"}}>ATLAS Pro</span>
     </div>
-    <div style={{display:"flex",gap:2,alignItems:"center"}}>
-      {STEPS.map((step,i)=>{const st=stepStates[step.id]||{status:'idle'};const isRun=st.status==='running',isDone=st.status==='done',isErr=st.status==='error';
-      return<React.Fragment key={step.id}>
-        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}} title={`${step.label}: ${st.msg||step.desc}`}>
-          <div style={{width:36,height:36,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,
-            background:isDone?"rgba(16,185,129,.12)":isErr?"rgba(239,68,68,.1)":isRun?"rgba(99,102,241,.15)":"rgba(15,23,42,.4)",
-            border:`1.5px solid ${isDone?"rgba(16,185,129,.3)":isErr?"rgba(239,68,68,.3)":isRun?"rgba(99,102,241,.4)":"rgba(30,41,59,.3)"}`,
-            transition:"all .3s",boxShadow:isRun?"0 0 8px rgba(99,102,241,.3)":"none"}}>
-            {isRun?<div style={{width:14,height:14,border:"2.5px solid #6366f140",borderTopColor:"#a5b4fc",borderRadius:7,animation:"spin .6s linear infinite"}}/>:isDone?"✅":isErr?"❌":step.icon}
-          </div>
-          <div style={{fontSize:10,fontWeight:isDone?700:isRun?800:500,color:isDone?"#10b981":isErr?"#ef4444":isRun?"#c7d2fe":"#475569",textAlign:"center",lineHeight:1.1}}>{step.label}</div>
+    {STEPS.map((step,i)=>{const st=stepStates[step.id]||{status:'idle'};const isRun=st.status==='running',isDone=st.status==='done',isErr=st.status==='error',isSkip=st.status==='skip';
+    return<div key={step.id}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 8px",borderRadius:9,background:isRun?"rgba(99,102,241,.06)":"transparent",border:isRun?"1px solid rgba(99,102,241,.12)":"1px solid transparent",transition:"all .3s"}}>
+        <div style={{width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,
+          background:isDone?"rgba(16,185,129,.08)":isErr?"rgba(239,68,68,.08)":isRun?"rgba(99,102,241,.1)":"rgba(15,23,42,.3)",
+          border:`1px solid ${isDone?"rgba(16,185,129,.18)":isErr?"rgba(239,68,68,.18)":isRun?"rgba(99,102,241,.2)":"rgba(30,41,59,.4)"}`}}>
+          {isRun?<div style={{width:12,height:12,border:"2px solid #6366f140",borderTopColor:"#6366f1",borderRadius:6,animation:"spin .7s linear infinite"}}/>:isDone?"✅":isErr?"❌":isSkip?"⏭️":step.icon}
         </div>
-        {i<STEPS.length-1&&<div style={{width:14,height:2,background:isDone?"#10b98160":"#334155",borderRadius:1,flexShrink:0,marginTop:-8}}/>}
-      </React.Fragment>})}
-    </div>
-    {activeStep&&stepStates[activeStep.id]?.msg&&<div style={{marginTop:6,fontSize:10,color:"#a5b4fc",fontWeight:600,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stepStates[activeStep.id].msg}</div>}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,fontWeight:isRun?700:isDone?600:500,color:isDone?"#10b981":isErr?"#ef4444":isRun?"#e2e8f0":"#475569"}}>{step.label}</div>
+          <div style={{fontSize:9.5,color:isRun?"#94a3b8":"#334155",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{st.msg||step.desc}</div>
+        </div>
+        {isRun&&typeof st.progress==='number'&&st.progress>0&&<span style={{fontSize:10,fontWeight:800,fontFamily:"var(--mono)",color:"#818cf8"}}>{Math.round(st.progress)}%</span>}
+        {isDone&&<span style={{fontSize:9,color:"#10b981",fontWeight:600}}>완료</span>}
+      </div>
+      {isRun&&typeof st.progress==='number'&&st.progress>0&&<div style={{margin:"1px 40px 3px",height:2.5,borderRadius:2,background:"#1e293b",overflow:"hidden"}}><div style={{height:"100%",borderRadius:2,background:"linear-gradient(90deg,#6366f1,#3b82f6)",transition:"width .4s",width:`${Math.min(100,st.progress)}%`}}/></div>}
+      {i<STEPS.length-1&&<div style={{marginLeft:22,width:1,height:3,background:"#1e293b"}}/>}
+    </div>})}
   </div>;
 }
 
@@ -1256,14 +1254,14 @@ async function callClaudeAPI(text,diagramList){
     const res=await fetch(API_BASE+'/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,diagramList,mode:'match',sessionId:SESSION_ID})});
     if(!res.ok)return null;
     return await res.json();
-  }catch(e){console.warn('ATLAS API 호출 실패:',e);return null}
+  }catch(e){console.warn('Claude API 호출 실패:',e);return null}
 }
 async function callClaudeReport(analysisData){
   try{
     const res=await fetch(API_BASE+'/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:analysisData.input_text||'분석',mode:'report',analysisData,sessionId:SESSION_ID})});
     if(!res.ok)return null;
     return await res.json();
-  }catch(e){console.warn('ATLAS AI 감정서 생성 실패:',e);return null}
+  }catch(e){console.warn('Claude 감정서 생성 실패:',e);return null}
 }
 
 function App(){
@@ -1286,7 +1284,6 @@ function App(){
   const[stepStates,setStepStates]=useState({});
   const[savedId,setSavedId]=useState(null);
   const[fbSent,setFbSent]=useState(false);
-  const[agreed,setAgreed]=useState(false);
   const[llmResult,setLlmResult]=useState(null);
   const[llmLoading,setLlmLoading]=useState(false);
   const[gpuResult,setGpuResult]=useState(null);
@@ -1452,111 +1449,74 @@ function App(){
       await new Promise(r=>setTimeout(r,200));
     }else{setStep("gpu","skip",null,gpuAvail===false?"GPU 서버 미연결":"영상/이미지 없음")}
 
-    // ═══ Step 6: ATLAS AI 1차 추론 (PRIMARY) ═══
-    if(combined.length<5){setStep("claude","error",null,"텍스트 부족");setRunning(false);return}
-    setStep("claude","running",10,"ATLAS AI 분석 요청 중...");
-    const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
-    let claudeInput=combined;
-    if(gpuResult?.for_claude)claudeInput+="\n\n"+gpuResult.for_claude;
-    const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
-    const dbResults=await searchPrecedentsDB(combined,accType,10);
-    if(dbResults.length>0)claudeInput+="\n\n## 유사 판례 DB 검색 결과\n"+dbResults.slice(0,5).map(d=>`- ${d.case_number||''} (${d.court||''}) 과실${d.fault_ratio||'?'} ${d.categories||''} ${(d.summary||'').slice(0,100)}`).join('\n');
-    setStep("claude","running",30,"ATLAS AI 추론 중...");
-    let claudeResult=null;
-    try{
-      const cr=await callClaudeAPI(claudeInput,diagramListStr);
-      if(cr?.success&&cr.result){claudeResult=cr.result;claudeResult._tokens=cr.tokens||0;
-        setStep("claude","done",100,`도표 ${cr.result.diagram_id||'?'} · 과실 ${cr.result.fault_a??'?'}:${cr.result.fault_b??'?'}`);
-      }else{setStep("claude","done",100,"ATLAS AI 실패 → 엔진 폴백")}
-    }catch(e){setStep("claude","error",null,"AI API 오류 → 엔진 폴백")}
-    await new Promise(r=>setTimeout(r,200));
-
-    // ═══ Step 7: 엔진 비교분석 ═══
-    setStep("match","running",40,`${DB.length}개 도표 패턴매칭...`);
-    await new Promise(r=>setTimeout(r,300));
+    // Step 5: Diagram match
+    if(combined.length<5){setStep("match","error",null,"텍스트 부족");setRunning(false);return}
+    setStep("match","running",40,`${DB.length}개 도표 대조 중...`);
+    await new Promise(r=>setTimeout(r,400));
     const m=matchDiagram(combined);
-    if(m){setStep("match","done",100,`엔진: ${m.match.id} (${m.matchScore}점)`)}
-    else{setStep("match","done",100,"엔진 매칭 실패")}
-    await new Promise(r=>setTimeout(r,150));
-
-    if(!claudeResult&&!m){
-      setStep("result","error",null,"분석 불가");
+    if(!m){
+      setStep("match","error",null,"매칭 도표 없음");
       setResult({error:true,text:combined});setRunning(false);setPage("result");return;
     }
+    setStep("match","done",100,`${m.match.id} · ${m.match.t} (점수:${m.matchScore})`);
+    await new Promise(r=>setTimeout(r,200));
 
-    // ═══ Step 8: 판례 검색 ═══
+    // Step 6: Similar (로컬 KB + Supabase 69,370건)
     setStep("similar","running",30,"유사 판례 검색...");
     await new Promise(r=>setTimeout(r,200));
     const sim=findSimilar(combined,kb);
+    setStep("similar","running",60,"Supabase 판례 DB 검색...");
+    const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
+    const dbResults=await searchPrecedentsDB(combined,accType,10);
     const allSimilar=[...sim,...dbResults.filter(d=>!sim.some(s=>s.id===d.id))].sort((a,b)=>(b.matchScore||0)-(a.matchScore||0)).slice(0,10);
-    setStep("similar","done",100,allSimilar.length?`${allSimilar.length}건`:"없음");
+    setStep("similar","done",100,allSimilar.length?`${allSimilar.length}건 (로컬${sim.length}+DB${dbResults.length})`:"없음");
     await new Promise(r=>setTimeout(r,150));
 
-    // ═══ Step 9: 결과 산출 ═══
-    setStep("result","running",60,"과실비율 종합 산출...");
+    // Step 7: Result
+    setStep("result","running",60,"과실비율 산출...");
     await new Promise(r=>setTimeout(r,400));
     const mods=detectMods(combined);
-    let engineFaultA=50,engineFaultB=50,engineDiagram=null;
-    if(m){const ef=calcFault(m.match,mods);engineFaultA=ef.fA;engineFaultB=ef.fB;engineDiagram=m.match}
-
-    let primaryDiagram,primaryFaultA,primaryFaultB,primarySource;
-    if(claudeResult&&claudeResult.diagram_id){
-      const claudeDiag=DB.find(d=>d.id===claudeResult.diagram_id);
-      primaryDiagram=claudeDiag||engineDiagram||DB[0];
-      primaryFaultA=claudeResult.fault_a??engineFaultA;
-      primaryFaultB=claudeResult.fault_b??engineFaultB;
-      primarySource='claude';
-    }else if(m){
-      primaryDiagram=engineDiagram;primaryFaultA=engineFaultA;primaryFaultB=engineFaultB;primarySource='engine';
-    }else{
-      primaryDiagram=DB[0];primaryFaultA=50;primaryFaultB=50;primarySource='fallback';
-    }
-
-    const isPed=primaryDiagram.bf?.p!==undefined;
-    const resultObj={
-      diagram:primaryDiagram,confidence:claudeResult?.confidence||(m?.confidence)||"중",
-      matchScore:m?.matchScore||0,alts:m?.alts||[],
-      faultA:primaryFaultA,faultB:primaryFaultB,
-      labelA:primaryDiagram.la||(isPed?"차량":"A"),labelB:primaryDiagram.lb||(isPed?"보행자":"B"),
-      mods,appliedMods:(primaryDiagram.mods||[]).map(mod=>({...mod,applied:mods.some(dm=>mod.n.includes(dm)||dm.includes(mod.n))})),
-      laws:getLaws(primaryDiagram,combined),similar:allSimilar,dbPrecedents:dbResults,text:combined,
-      primarySource,claudeResult,engineMatch:m,engineFault:{a:engineFaultA,b:engineFaultB},
-      diagramMatch:primarySource==='claude'&&m?(primaryDiagram.id===m.match.id?"일치":"불일치"):"N/A"
-    };
-    if(claudeResult?.analysis){
-      resultObj.analysis=claudeResult.analysis;
-      if(claudeResult.reasoning)resultObj.analysis=claudeResult.reasoning+"\n\n"+resultObj.analysis;
-    }else{resultObj.analysis=generateAnalysis(resultObj,safeInput)}
+    const{fA,fB}=calcFault(m.match,mods);
+    const isPed=m.match.bf.p!==undefined;
+    const resultObj={diagram:m.match,confidence:m.confidence,matchScore:m.matchScore,alts:m.alts,faultA:fA,faultB:fB,
+      labelA:m.match.la||(isPed?"차량":"A"),labelB:m.match.lb||(isPed?"보행자":"B"),
+      mods,appliedMods:(m.match.mods||[]).map(mod=>({...mod,applied:mods.some(dm=>mod.n.includes(dm)||dm.includes(mod.n))})),
+      laws:getLaws(m.match,combined),similar:allSimilar,dbPrecedents:dbResults,text:combined};
+    resultObj.analysis=generateAnalysis(resultObj,safeInput);
     setResult(resultObj);
-    setLlmResult(claudeResult||null);setLlmLoading(false);
     setSavedId(null);setFbSent(false);
-
+    // ═══ 서버 자동 저장 ═══
     saveToServer({
       input_text:safeInput,input_type:hasPDF?'pdf':hasImage?'ocr':hasVideo?'video':'text',
       has_pdf:hasPDF,has_image:hasImage,has_video:hasVideo,
       pdf_text:pdfText,ocr_text:ocrResult?.text||'',video_env:vidEnv,
-      diagram_id:primaryDiagram.id,diagram_title:primaryDiagram.t,category:primaryDiagram.cat,subcategory:primaryDiagram.sub,
-      confidence:resultObj.confidence,match_score:resultObj.matchScore,alt_diagrams:resultObj.alts,
-      fault_a:primaryFaultA,fault_b:primaryFaultB,label_a:resultObj.labelA,label_b:resultObj.labelB,
-      base_fault_a:isPed?(primaryDiagram.bf?.c||0):(primaryDiagram.bf?.a||0),
-      base_fault_b:isPed?(primaryDiagram.bf?.p||0):(primaryDiagram.bf?.b||0),
+      diagram_id:m.match.id,diagram_title:m.match.t,category:m.match.cat,subcategory:m.match.sub,
+      confidence:m.confidence,match_score:m.matchScore,alt_diagrams:m.alts,
+      fault_a:fA,fault_b:fB,label_a:resultObj.labelA,label_b:resultObj.labelB,
+      base_fault_a:isPed?m.match.bf.c:m.match.bf.a,base_fault_b:isPed?m.match.bf.p:m.match.bf.b,
       detected_mods:mods,applied_mods:resultObj.appliedMods,laws:resultObj.laws.map(l=>({a:l.a,d:l.d})),
-      analysis_text:resultObj.analysis,llm_used:primarySource==='claude',primary_source:primarySource,
+      analysis_text:resultObj.analysis,llm_used:false,
       gpu_used:!!gpuResult,gpu_result:gpuResult?.summary||null
     }).then(res=>{if(res?.id)setSavedId(res.id);else setSavedId('local')}).catch(()=>{setSavedId('local')});
-
-    if(claudeResult){
-      const llmData={llm_response:claudeResult,llm_used:true,llm_diagram_id:claudeResult.diagram_id||null,
-        llm_fault_a:claudeResult.fault_a,llm_fault_b:claudeResult.fault_b,llm_confidence:claudeResult.confidence||null,
-        llm_reasoning:claudeResult.reasoning||'',llm_analysis:claudeResult.analysis||'',
-        llm_modifiers:claudeResult.detected_modifiers||[],llm_tokens:claudeResult._tokens||0,
-        engine_diagram_id:m?.match?.id||null,engine_fault_a:engineFaultA,engine_fault_b:engineFaultB,
-        primary_source:primarySource};
-      fetch(API_BASE+'/api/save',{method:'PATCH',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({session_id:SESSION_ID,llm_data:llmData})}).catch(()=>{});
-    }
-
-    setStep("result","done",100,`${primarySource==='claude'?'🤖':'📋'} ${primaryDiagram.id} · ${primaryFaultA}:${primaryFaultB}`);
+    // ═══ Claude API 보조 분석 (백그라운드) ═══
+    setLlmResult(null);setLlmLoading(true);
+    const diagramListStr=DB.map(d=>{const bf=d.bf;const fa=bf.a??bf.c??0;const fb=bf.b??bf.p??0;return`${d.id}: ${d.t} [A${fa}:B${fb}] (${d.cat}/${d.sub})`}).join('\n');
+    let claudeInput=combined;
+    if(gpuResult?.for_claude)claudeInput+="\n\n"+gpuResult.for_claude;
+    if(dbResults.length>0)claudeInput+="\n\n## 유사 판례 DB 검색 결과\n"+dbResults.slice(0,5).map(d=>`- ${d.case_number||''} (${d.court||''}) 과실${d.fault_ratio||'?'} ${d.categories||''} ${(d.summary||'').slice(0,100)}`).join('\n');
+    callClaudeAPI(claudeInput,diagramListStr).then(cr=>{
+      if(cr?.success&&cr.result){setLlmResult(cr.result);setLlmLoading(false);
+        // ═══ Claude 분석 결과 DB 업데이트 (학습 데이터) ═══
+        const llmData={llm_response:cr.result,llm_used:true,llm_diagram_id:cr.result.diagram_id||null,
+          llm_fault_a:cr.result.fault_a,llm_fault_b:cr.result.fault_b,llm_confidence:cr.result.confidence||null,
+          llm_reasoning:cr.result.reasoning||'',llm_analysis:cr.result.analysis||'',
+          llm_modifiers:cr.result.detected_modifiers||[],llm_tokens:cr.tokens||0,
+          engine_diagram_id:m.match.id};
+        fetch(API_BASE+'/api/save',{method:'PATCH',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({session_id:SESSION_ID,llm_data:llmData})}).catch(()=>{});
+      } else setLlmLoading(false);
+    }).catch(()=>{setLlmLoading(false);setLlmResult({error:true,raw:'API 연결 실패'})});
+    setStep("result","done",100,`${m.match.id} · ${fA}:${fB}`);
     setRunning(false);setPage("result");
   },[input,files,vidSrc,kb,running]);
 
@@ -1745,10 +1705,10 @@ function App(){
             </div>)}
           </div></div>}
 
-          {/* 8. ATLAS AI 분석 */}
-          {llmResult&&!llmResult.error&&<div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#6366f1"}}>제8장 ATLAS AI 분석</div><div style={TS.sb}>
+          {/* 8. Claude AI 보조 분석 */}
+          {llmResult&&!llmResult.error&&<div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#6366f1"}}>제8장 Claude AI 보조 분석</div><div style={TS.sb}>
             <div style={{background:"#f0f0ff",border:"1px solid #d0d0f0",borderRadius:8,padding:12,marginBottom:10}}>
-              <div style={{fontSize:10,color:"#6366f1",fontWeight:700,marginBottom:6}}>🤖 AI 분석 엔진: ATLAS AI (MD Labs)</div>
+              <div style={{fontSize:10,color:"#6366f1",fontWeight:700,marginBottom:6}}>🤖 AI 분석 엔진: Claude (Anthropic)</div>
               {llmResult.reasoning&&<p style={{fontSize:10.5,color:"#444",lineHeight:1.9,marginBottom:8}}>
                 <b>AI 추론 과정:</b> {llmResult.reasoning}</p>}
               {llmResult.analysis&&<p style={{fontSize:10.5,color:"#444",lineHeight:1.9,marginBottom:8}}>
@@ -1757,7 +1717,7 @@ function App(){
                 <thead><tr>
                   <th style={{...TS.th,background:"#e8e8f8",width:"25%"}}>항목</th>
                   <th style={{...TS.th,background:"#e8f0e8",width:"37%"}}>패턴매칭 엔진</th>
-                  <th style={{...TS.th,background:"#e8e8f8",width:"38%"}}>ATLAS AI</th>
+                  <th style={{...TS.th,background:"#e8e8f8",width:"38%"}}>Claude AI</th>
                 </tr></thead>
                 <tbody>
                   <tr><td style={{...TS.td,fontWeight:700}}>추천 도표</td>
@@ -1776,7 +1736,7 @@ function App(){
               </table>
             </div>
             {d.id!==llmResult.diagram_id&&llmResult.diagram_id&&<div style={{padding:8,background:"#fff8e1",border:"1px solid #ffe082",borderRadius:6,fontSize:10.5,lineHeight:1.7}}>
-              <b>⚠️ 도표 불일치 안내:</b> 패턴매칭 엔진(도표 {d.id})과 ATLAS AI(도표 {llmResult.diagram_id})의 추천이 다릅니다.
+              <b>⚠️ 도표 불일치 안내:</b> 패턴매칭 엔진(도표 {d.id})과 Claude AI(도표 {llmResult.diagram_id})의 추천이 다릅니다.
               사고 상황을 재검토하시거나, 전문가 확인을 권장합니다.
             </div>}
           </div></div>}
@@ -1789,7 +1749,7 @@ function App(){
             {r.mods?.length>0?` 수정요소(${r.mods.join(', ')})를 반영하여`:' 수정요소 없이'}
             {' '}최종 과실비율을 <b>{r.labelA} {r.faultA}% : {r.labelB} {r.faultB}%</b>로 산정합니다.</p>
             {llmResult&&!llmResult.error&&<p style={{marginTop:8,padding:8,background:"#f0f8f0",border:"1px solid #c8e6c9",borderRadius:6}}>
-              <b>🤖 AI 종합 판단:</b> ATLAS AI 분석 결과,
+              <b>🤖 AI 종합 판단:</b> Claude AI 보조 분석 결과,
               {d.id===llmResult.diagram_id
                 ?<> 도표 <b>{d.id}</b>이 적합하다는 점에서 <span style={{color:"#27ae60",fontWeight:700}}>패턴매칭 엔진과 일치</span>하여 분석 신뢰도가 높습니다.
                   {llmResult.fault_a!==undefined&&Math.abs(r.faultA-llmResult.fault_a)<=5
@@ -1921,20 +1881,19 @@ function App(){
             </div>)}
           </div>}
 
-          {(r.appliedMods?.length>0||r.laws?.length>0)&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-            {r.appliedMods?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,maxHeight:200,overflowY:"auto"}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6,position:"sticky",top:0,background:C.card,paddingBottom:4}}>🔧 수정요소</div>
-              {r.appliedMods.map((m,i)=><div key={i} style={{padding:"4px 8px",borderRadius:7,marginBottom:2,background:m.applied?`${C.blue}06`:"rgba(15,23,42,.3)",fontSize:11}}>
-                {m.applied?"✅":"⬜"} {m.n} <span style={{fontFamily:"var(--mono)",color:m.v>0?"#f87171":"#60a5fa"}}>{m.v>0?"+":""}{m.v}%</span>
-              </div>)}
-            </div>}
-            {r.laws?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,maxHeight:200,overflowY:"auto"}}>
-              <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6,position:"sticky",top:0,background:C.card,paddingBottom:4}}>📖 관련 법규</div>
-              {r.laws.map((l,i)=><div key={i} style={{padding:"4px 7px",borderRadius:7,background:"rgba(6,9,16,.3)",marginBottom:2,borderLeft:`3px solid ${C.indigo}`}}>
-                <div style={{fontSize:10,fontWeight:700,color:"#a5b4fc"}}>{l.a}</div>
-                <div style={{fontSize:9,color:C.t2}}>{l.d}</div>
-              </div>)}
-            </div>}
+          {r.appliedMods?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>🔧 수정요소</div>
+            {r.appliedMods.map((m,i)=><div key={i} style={{padding:"4px 8px",borderRadius:7,marginBottom:2,background:m.applied?`${C.blue}06`:"rgba(15,23,42,.3)",fontSize:11}}>
+              {m.applied?"✅":"⬜"} {m.n} <span style={{fontFamily:"var(--mono)",color:m.v>0?"#f87171":"#60a5fa"}}>{m.v>0?"+":""}{m.v}%</span>
+            </div>)}
+          </div>}
+
+          {r.laws?.length>0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.t3,marginBottom:6}}>📖 관련 법규</div>
+            {r.laws.map((l,i)=><div key={i} style={{padding:"5px 8px",borderRadius:7,background:"rgba(6,9,16,.3)",marginBottom:2,borderLeft:`3px solid ${C.indigo}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#a5b4fc"}}>{l.a}</div>
+              <div style={{fontSize:10,color:C.t2}}>{l.d}</div>
+            </div>)}
           </div>}
 
           <div style={{textAlign:"center",marginBottom:14}}>
@@ -1944,72 +1903,36 @@ function App(){
             <p style={{fontSize:10,color:C.t3,marginTop:6}}>전문 감정서 형식으로 출력 · 인쇄/PDF 저장 가능</p>
           </div>
 
-          {/* v8.5 ATLAS AI + 엔진 비교 + 학습레이블 */}
-          {r.primarySource&&<div style={{background:r.primarySource==='claude'?"rgba(99,102,241,.04)":"rgba(59,130,246,.04)",border:`1px solid ${r.primarySource==='claude'?C.violet:C.blue}15`,borderRadius:14,padding:14,marginBottom:10}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-              <span style={{fontSize:16}}>{r.primarySource==='claude'?'🤖':'📋'}</span>
-              <div>
-                <div style={{fontSize:12,fontWeight:800,color:r.primarySource==='claude'?C.violet:C.blue}}>
-                  {r.primarySource==='claude'?'ATLAS AI 1차 추론 결과':'엔진 결과 (ATLAS AI 폴백)'}
-                </div>
-              </div>
+          {(llmLoading||llmResult)&&<div style={{background:C.card,border:`1px solid ${C.violet}15`,borderRadius:14,padding:14,marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+              <span>🤖</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.violet}}>Claude AI 보조 분석</span>
+              {llmLoading&&<span style={{fontSize:9,color:C.t3,animation:"pulse 1.5s infinite"}}>분석 중...</span>}
             </div>
-            {r.claudeResult&&<div style={{marginBottom:10}}>
-              {r.claudeResult.reasoning&&<div style={{padding:10,borderRadius:8,background:"rgba(99,102,241,.04)",border:`1px solid ${C.violet}10`,marginBottom:8}}>
-                <div style={{fontSize:10,fontWeight:700,color:C.violet,marginBottom:4}}>🧠 AI 추론</div>
-                <p style={{fontSize:11,color:C.t2,lineHeight:1.8,whiteSpace:"pre-line"}}>{r.claudeResult.reasoning}</p>
+            {llmResult&&<div>
+              {llmResult.reasoning&&<p style={{fontSize:11,color:C.t2,lineHeight:1.7,marginBottom:8}}>{llmResult.reasoning}</p>}
+              {llmResult.analysis&&<p style={{fontSize:11,color:C.t2,lineHeight:1.7,marginBottom:8}}>{llmResult.analysis}</p>}
+              {llmResult.diagram_id&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:6}}>
+                <Tag color={C.violet}>AI추천: {llmResult.diagram_id}</Tag>
+                {llmResult.fault_a!==undefined&&<Tag color={C.cyan}>AI과실: {llmResult.fault_a}:{llmResult.fault_b}</Tag>}
+                {llmResult.confidence&&<Tag color={C.amber}>신뢰도: {llmResult.confidence}</Tag>}
               </div>}
-              {r.claudeResult.analysis&&<div style={{padding:10,borderRadius:8,background:"rgba(16,185,129,.03)",border:`1px solid ${C.emerald}10`,marginBottom:8}}>
-                <div style={{fontSize:10,fontWeight:700,color:C.emerald,marginBottom:4}}>📝 분석</div>
-                <p style={{fontSize:11,color:C.t2,lineHeight:1.8,whiteSpace:"pre-line"}}>{r.claudeResult.analysis}</p>
-              </div>}
-            </div>}
-            {r.engineMatch&&<div style={{background:"rgba(6,9,16,.4)",borderRadius:10,padding:10,border:`1px solid ${C.b1}`}}>
-              <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:8}}>📊 엔진 vs ATLAS AI</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:10}}>
-                <div style={{fontWeight:700,color:C.t3,padding:"4px 6px"}}>항목</div>
-                <div style={{fontWeight:700,color:C.blue,padding:"4px 6px",textAlign:"center"}}>📋 엔진</div>
-                <div style={{fontWeight:700,color:C.violet,padding:"4px 6px",textAlign:"center"}}>🤖 ATLAS</div>
-                <div style={{color:C.t2,padding:"4px 6px",borderTop:`1px solid ${C.b1}`}}>도표</div>
-                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`}}>{r.engineMatch.match.id}</div>
-                <div style={{color:r.claudeResult?.diagram_id===r.engineMatch.match.id?C.emerald:C.amber,fontWeight:700,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`}}>
-                  {r.claudeResult?.diagram_id||'-'} {r.claudeResult?.diagram_id===r.engineMatch.match.id?'✅':'⚠️'}
-                </div>
-                <div style={{color:C.t2,padding:"4px 6px",borderTop:`1px solid ${C.b1}`}}>과실</div>
-                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",fontFamily:"var(--mono)",borderTop:`1px solid ${C.b1}`}}>A {r.engineFault?.a} : B {r.engineFault?.b}</div>
-                <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",fontFamily:"var(--mono)",fontWeight:700,borderTop:`1px solid ${C.b1}`}}>A {r.faultA} : B {r.faultB}</div>
-              </div>
-              {r.diagramMatch==='불일치'&&<div style={{marginTop:6,padding:6,background:`${C.amber}06`,borderRadius:6,fontSize:10,color:C.amber}}>⚠️ 도표 불일치 — 학습 데이터 축적</div>}
-              {r.diagramMatch==='일치'&&<div style={{marginTop:6,padding:6,background:`${C.emerald}06`,borderRadius:6,fontSize:10,color:C.emerald}}>✅ 도표 일치 — 높은 신뢰도</div>}
-              {(()=>{
-                const fDiff=Math.abs((r.faultA||0)-(r.engineFault?.a||0));
-                const dMatch=r.diagramMatch==='일치';
-                let grade,gColor;
-                if(dMatch&&fDiff<=5){grade='정확';gColor='#10b981'}
-                else if(dMatch&&fDiff<=15){grade='부합';gColor='#f59e0b'}
-                else if(!dMatch&&fDiff<=20){grade='검토';gColor='#f97316'}
-                else{grade='틀림';gColor='#ef4444'}
-                return<div style={{marginTop:6,padding:"6px 10px",borderRadius:8,background:`${gColor}08`,border:`1px solid ${gColor}20`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <span style={{fontSize:10,color:gColor,fontWeight:700}}>📊 분석 결과 (학습반영): <span style={{fontSize:12,padding:"1px 8px",borderRadius:4,background:`${gColor}15`}}>{grade}</span></span>
-                  <span style={{fontSize:9,color:"#64748b"}}>과실차이 {fDiff}%p</span>
-                </div>
-              })()}
+              {llmResult.detected_modifiers?.length>0&&<div style={{fontSize:10,color:C.t3,marginTop:4}}>수정요소: {llmResult.detected_modifiers.join(', ')}</div>}
+              {llmResult.error&&<p style={{fontSize:10,color:C.amber}}>{llmResult.raw||'AI 분석 결과 파싱 실패'}</p>}
             </div>}
           </div>}
 
           {savedId&&savedId!=='local'&&<div style={{background:C.card,border:`1px solid ${C.emerald}15`,borderRadius:14,padding:14,marginBottom:10,textAlign:"center"}}>
             <div style={{fontSize:11,fontWeight:700,color:C.emerald,marginBottom:8}}>✅ 분석 결과가 서버에 저장되었습니다</div>
             {!fbSent?<div>
-              <div style={{fontSize:10,color:C.t3,marginBottom:8}}>분석 결과를 평가해주세요 (학습에 반영됩니다)</div>
-              <div style={{display:"flex",gap:6,justifyContent:"center"}}>
-                <button onClick={()=>{sendFeedback(savedId,true,'정확');setFbSent('정확')}} style={{padding:"8px 16px",borderRadius:8,border:"2px solid rgba(16,185,129,.5)",background:"rgba(16,185,129,.18)",color:"#10b981",fontSize:12,fontWeight:700,cursor:"pointer"}}>✅ 정확</button>
-                <button onClick={()=>{sendFeedback(savedId,true,'부합');setFbSent('부합')}} style={{padding:"8px 16px",borderRadius:8,border:"2px solid rgba(245,158,11,.5)",background:"rgba(245,158,11,.18)",color:"#f59e0b",fontSize:12,fontWeight:700,cursor:"pointer"}}>🟡 부합</button>
-                <button onClick={()=>{sendFeedback(savedId,false,'검토');setFbSent('검토')}} style={{padding:"8px 16px",borderRadius:8,border:"2px solid rgba(249,115,22,.5)",background:"rgba(249,115,22,.18)",color:"#f97316",fontSize:12,fontWeight:700,cursor:"pointer"}}>🟠 검토</button>
-                <button onClick={()=>{sendFeedback(savedId,false,'틀림');setFbSent('틀림')}} style={{padding:"8px 16px",borderRadius:8,border:"2px solid rgba(239,68,68,.5)",background:"rgba(239,68,68,.18)",color:"#ef4444",fontSize:12,fontWeight:700,cursor:"pointer"}}>❌ 틀림</button>
+              <div style={{fontSize:10,color:C.t3,marginBottom:8}}>이 분석 결과가 정확한가요? (학습에 반영됩니다)</div>
+              <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+                <button onClick={()=>{sendFeedback(savedId,true,'정확함');setFbSent('correct')}} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"rgba(16,185,129,.12)",color:C.emerald,fontSize:12,fontWeight:700,cursor:"pointer"}}>👍 정확해요</button>
+                <button onClick={()=>{sendFeedback(savedId,false,'부정확');setFbSent('wrong')}} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"rgba(239,68,68,.08)",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer"}}>👎 틀려요</button>
               </div>
             </div>:
-            <div style={{fontSize:11,color:fbSent==='정확'?"#10b981":fbSent==='부합'?"#f59e0b":fbSent==='검토'?"#f97316":"#ef4444",fontWeight:600}}>
-              {'평가: '+fbSent+' — 감사합니다! 학습에 반영됩니다.'}
+            <div style={{fontSize:11,color:fbSent==='correct'?C.emerald:C.amber,fontWeight:600}}>
+              {fbSent==='correct'?'✅ 감사합니다! 정확도 향상에 반영됩니다.':'📝 피드백 감사합니다. 개선에 활용하겠습니다.'}
             </div>}
           </div>}
           {!savedId&&<div style={{textAlign:"center",marginBottom:10}}><span style={{fontSize:9,color:C.t3}}>💾 서버 저장 중...</span></div>}
@@ -2029,14 +1952,9 @@ function App(){
   return<div style={{minHeight:"100vh",background:C.bg,color:C.t1,fontFamily:"var(--sans)"}}>
     <div style={{padding:"10px 16px",background:"rgba(6,9,16,.9)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,zIndex:50}}>
       <div style={{...mx,display:"flex",alignItems:"center",gap:8,padding:0}}>
-        <div style={{flex:1}}><div style={{fontWeight:900,fontSize:15,letterSpacing:-.3}}>MD Labs <span style={{fontWeight:700,fontSize:12,color:C.blue}}>ATLAS Pro</span></div><div style={{fontSize:9,color:C.t2,letterSpacing:.8,fontWeight:500}}>AI Traffic Legal Analysis System</div></div>
-        <div style={{display:"flex",alignItems:"center",gap:4}}>
-          <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>{DB.length}도표 · 69K판례</span>
-          <div style={{display:"flex",borderRadius:4,overflow:"hidden",border:`1px solid ${C.b1}`}}>
-            <span style={{padding:"2px 6px",fontSize:8,fontWeight:700,background:"rgba(99,102,241,.15)",color:C.blue,cursor:"pointer"}}>KR</span>
-            <span style={{padding:"2px 6px",fontSize:8,color:C.t3,cursor:"pointer"}}>EN</span>
-          </div>
-        </div>
+        <div style={{width:30,height:30,borderRadius:9,background:`linear-gradient(135deg,${C.blue},${C.violet})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>⚖️</div>
+        <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13}}>MD Labs <span style={{fontSize:9,color:C.indigo}}>AI</span></div><div style={{fontSize:8.5,color:C.t3}}>과실비율 분석 ATLAS Pro</div></div>
+        <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>DB {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규 · 69,370판례</span>
         {gpuAvail&&<span style={{fontSize:8,color:"#27ae60",padding:"2px 6px",borderRadius:4,background:"rgba(39,174,96,.1)",border:"1px solid rgba(39,174,96,.3)",marginLeft:4,cursor:"pointer"}} onClick={()=>{
           const m=prompt("GPU 모드 선택:\n\n1 = LOCAL (무료, PC 직접)\n2 = NGROK (무료, 외부 터널)\n3 = CLOUD (유료, 24시간)\n\n현재: "+gpuMode.toUpperCase()+"\nURL: "+GPU_SERVER_URL,"");
           if(m==='1'){localStorage.setItem('atlas_gpu_mode','local');localStorage.removeItem('atlas_gpu_ngrok_url');localStorage.removeItem('atlas_gpu_cloud_url');location.reload()}
@@ -2055,9 +1973,9 @@ function App(){
     <div style={{...mx,paddingTop:14,paddingBottom:80}}>
       <div style={{textAlign:"center",marginBottom:18}}>
         <h1 style={{fontSize:"clamp(20px,5vw,30px)",fontWeight:900,lineHeight:1.3,marginBottom:4}}>
-          교통사고 <span style={{background:`linear-gradient(135deg,${C.blue},${C.violet})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>과실비율</span> 분석 시스템
+          교통사고 <span style={{background:`linear-gradient(135deg,${C.blue},${C.violet})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>과실비율</span> 분석
         </h1>
-        <p style={{fontSize:12,color:C.t2}}>ATLAS AI 추론 → 사고 상황 입력 → 과실비율 즉시 산정</p>
+        <p style={{fontSize:12,color:C.t2}}>사고 상황 입력 → AI 분석 → 과실비율 즉시 확인</p>
       </div>
 
       {running&&<AgentPipeline stepStates={stepStates}/>}
@@ -2076,22 +1994,11 @@ function App(){
       </div>}
 
       <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:18,padding:18,marginBottom:12}}>
-        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:12}}><span style={{fontSize:15}}>📝</span><span style={{fontSize:14,fontWeight:800}}>사고 내용 기록</span></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
-          <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차종 및 연식</div>
-            <input placeholder="예: 현대 아이오닉 5 (2023)" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
-          <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차량 번호</div>
-            <input placeholder="예: 12가 3456" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
-          <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차대번호 (VIN) <span style={{fontSize:8,color:C.t3}}>(선택)</span></div>
-            <input placeholder="영문/숫자 혼합 17자리" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none",fontFamily:"var(--mono)"}}/></div>
-        </div>
-        <div style={{marginBottom:10}}>
-          <div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>사고 내용 설명 <span style={{color:C.red}}>*</span></div>
-          <textarea ref={taRef} value={input} onChange={e=>setInput(e.target.value)}
-            placeholder={"1) 사고 발생 시간:\n2) 사고 발생 장소:\n3) 보험 가입 여부:\n4) 경찰 신고 여부:\n5) 사고 내용 설명:\n\n예: 편도 2차로에서 1차로 직진 중 2차로 차량이 깜빡이 없이 차선변경하여 측면 충돌"}
-            style={{width:"100%",padding:12,borderRadius:12,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:12,outline:"none",resize:"vertical",minHeight:140,lineHeight:1.8,userSelect:"text",WebkitUserSelect:"text"}}/>
-          <div style={{fontSize:9.5,color:C.t3,marginTop:4}}>{input.length}자{input.length>=5&&<span style={{color:C.emerald}}> ✓</span>}</div>
-        </div>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:10}}><span style={{fontSize:14}}>📝</span><span style={{fontSize:12,fontWeight:700}}>사고 상황 입력</span></div>
+        <textarea ref={taRef} value={input} onChange={e=>setInput(e.target.value)}
+          placeholder={"사고 상황을 구체적으로 설명해주세요.\n\n예: 편도 2차로에서 1차로 직진 중 2차로 차량이\n깜빡이 없이 차선변경하여 측면 충돌"}
+          style={{width:"100%",padding:12,borderRadius:12,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:13,outline:"none",resize:"vertical",minHeight:90,lineHeight:1.7}}/>
+        <div style={{fontSize:9.5,color:C.t3,marginTop:4}}>{input.length}자{input.length>=5&&<span style={{color:C.emerald}}> ✓</span>}</div>
       </div>
 
       <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:18,padding:18,marginBottom:12}}>
@@ -2121,47 +2028,25 @@ function App(){
         </div>}
       </div>
 
-            {/* 동의서 */}
-      <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:18,padding:18,marginBottom:12}}>
-        <div style={{fontSize:12,fontWeight:800,color:"#fbbf24",marginBottom:8}}>사고 분석 자료 제공 및 활용 동의서</div>
-        <div style={{maxHeight:120,overflowY:"auto",padding:10,borderRadius:8,background:"rgba(6,9,16,.5)",border:`1px solid ${C.b1}`,fontSize:10,color:C.t2,lineHeight:1.8,marginBottom:8}}>
-          <p>엠디랩스(이하 "회사")는 이용자의 소중한 데이터를 바탕으로 전문적인 사고 분석 서비스를 제공합니다.</p>
-          <p style={{marginTop:6,fontWeight:700}}>1. 개인정보의 수집 및 이용 (필수)</p>
-          <p>• 수집 항목: 사고 내용, 차량 정보, 첨부 자료</p>
-          <p>• 수집 목적: 사고 분석 결과 제공, 서비스 품질 향상</p>
-          <p>• 보유 기간: 서비스 목적 달성 후 1년</p>
-          <p style={{marginTop:6,fontWeight:700}}>2. 분석 결과의 성격 및 한계</p>
-          <p>• 본 분석 결과는 AI 기반의 참고 자료이며, 실제 법적 판단과 다를 수 있습니다.</p>
-          <p style={{marginTop:6,fontWeight:700}}>3. 제공 자료의 적법성</p>
-          <p>• 이용자는 제공하는 자료가 본인이 적법하게 보유한 것임을 확인합니다.</p>
-        </div>
-        <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 0"}}>
-          <input type="checkbox" checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{width:18,height:18,accentColor:C.blue,cursor:"pointer",flexShrink:0}}/>
-          <span style={{fontSize:11,color:agreed?C.t1:C.t3,fontWeight:agreed?600:400}}>위 동의서의 내용을 모두 확인하였으며, 이에 동의합니다.</span>
-        </label>
-      </div>
-
-      <button onClick={runAnalysis} disabled={running||!agreed||(!input.trim()&&files.length===0&&!vidSrc)}
+      <button onClick={runAnalysis} disabled={running||(!input.trim()&&files.length===0&&!vidSrc)}
         style={{width:"100%",padding:"14px 20px",borderRadius:14,border:"none",
-          background:running?"rgba(99,102,241,.12)":agreed&&(input.trim()||files.length>0||vidSrc)?`linear-gradient(135deg,${C.blue},${C.violet})`:"#1e293b",
-          color:running?"#818cf8":agreed&&(input.trim()||files.length>0||vidSrc)?"#fff":"#475569",
+          background:running?"rgba(99,102,241,.12)":(input.trim()||files.length>0||vidSrc)?`linear-gradient(135deg,${C.blue},${C.violet})`:"#1e293b",
+          color:running?"#818cf8":(input.trim()||files.length>0||vidSrc)?"#fff":"#475569",
           fontSize:15,fontWeight:800,cursor:running?"wait":"pointer",transition:"all .3s",marginBottom:18,
           animation:running?"pulse 1.5s infinite":"none"}}>
-        {running?"🤖 ATLAS AI 추론 중...":"⚖️ 과실비율 분석 시작"}
+        {running?"🔄 AI 에이전트 분석 중...":"⚖️ 과실비율 분석 시작"}
       </button>
 
       <div style={{marginBottom:16}}>
-        <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:4}}>📌 예시 (좌우 스크롤)</div>
-        <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:6,WebkitOverflowScrolling:"touch"}}>
-          {examples.map((ex,i)=><button key={i} onClick={()=>{setInput(ex);taRef.current?.focus()}}
-            style={{flexShrink:0,width:220,textAlign:"left",padding:"8px 10px",borderRadius:8,border:`1px solid ${C.b1}`,background:"rgba(12,17,30,.5)",color:C.t2,fontSize:10,cursor:"pointer",lineHeight:1.4}}>
-            <span style={{color:C.indigo,fontWeight:700,marginRight:4}}>0{i+1}</span>{ex.slice(0,60)}...
-          </button>)}
-        </div>
+        <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:6}}>📌 예시 (클릭)</div>
+        {examples.map((ex,i)=><button key={i} onClick={()=>{setInput(ex);taRef.current?.focus()}}
+          style={{display:"block",width:"100%",textAlign:"left",padding:"8px 12px",borderRadius:8,border:`1px solid ${C.b1}`,background:"rgba(12,17,30,.4)",color:C.t2,fontSize:11,cursor:"pointer",lineHeight:1.5,marginBottom:3}}>
+          <span style={{color:C.indigo,fontWeight:700,marginRight:5}}>0{i+1}</span>{ex}
+        </button>)}
       </div>
 
       <div style={{textAlign:"center",padding:"10px 0"}}>
-        
+        <p style={{fontSize:9,color:C.t3}}>MD Labs ATLAS Pro · 손보협회 과실비율 인정기준 기반 · {DB.length}도표 · {MODS_DB.length}수정요소 · {LAWS_DB.length}법규</p>
       </div>
     </div>
   </div>;
