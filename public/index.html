@@ -1455,7 +1455,7 @@ function App(){
     // ═══ Step 6: ATLAS AI 1차 추론 (PRIMARY) ═══
     if(combined.length<5){setStep("claude","error",null,"텍스트 부족");setRunning(false);return}
     setStep("claude","running",10,"ATLAS AI 분석 요청 중...");
-    const diagramListStr=DB.map(d=>`${d.id}: ${d.t} (${d.cat}/${d.sub})`).join('\n');
+    const diagramListStr=DB.map(d=>{const bf=d.bf;const fa=bf.a??bf.c??0;const fb=bf.b??bf.p??0;return`${d.id}: ${d.t} [A${fa}:B${fb}] (${d.cat}/${d.sub})`}).join('\n');
     let claudeInput=combined;
     if(gpuResult?.for_claude)claudeInput+="\n\n"+gpuResult.for_claude;
     const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
