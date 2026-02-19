@@ -1464,7 +1464,7 @@ function App(){
     let claudeResult=null;
     try{
       const cr=await callClaudeAPI(claudeInput,diagramListStr);
-      if(cr?.success&&cr.result){claudeResult=cr.result;claudeResult._tokens=cr.tokens||0;
+      if(cr?.success&&cr.result){const _d=DB.find(d=>d.id===String(cr.result.diagram_id));if(_d){const _ba=_d.bf.a??_d.bf.c??0,_bb=_d.bf.b??_d.bf.p??0;if(Math.abs(cr.result.fault_a-_bb)+Math.abs(cr.result.fault_b-_ba)<Math.abs(cr.result.fault_a-_ba)+Math.abs(cr.result.fault_b-_bb)){const _t=cr.result.fault_a;cr.result.fault_a=cr.result.fault_b;cr.result.fault_b=_t;if(cr.result.label_a&&cr.result.label_b){const _l=cr.result.label_a;cr.result.label_a=cr.result.label_b;cr.result.label_b=_l}}}claudeResult=cr.result;claudeResult._tokens=cr.tokens||0;
         setStep("claude","done",100,`도표 ${cr.result.diagram_id||'?'} · 과실 ${cr.result.fault_a??'?'}:${cr.result.fault_b??'?'}`);
       }else{setStep("claude","done",100,"ATLAS AI 실패 → 엔진 폴백")}
     }catch(e){setStep("claude","error",null,"AI API 오류 → 엔진 폴백")}
