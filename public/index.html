@@ -2062,7 +2062,7 @@ function App(){
         <h1 style={{fontSize:"clamp(20px,5vw,30px)",fontWeight:900,lineHeight:1.3,marginBottom:4}}>
           교통사고 <span style={{background:`linear-gradient(135deg,${C.blue},${C.violet})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>과실비율</span> 분석 시스템
         </h1>
-        <p style={{fontSize:12,color:C.t2}}>ATLAS AI 추론 → 사고 상황 입력 → 과실비율 즉시 산정</p>
+        <p style={{fontSize:12,color:C.t2}}>사고 상황 입력 → ATLAS AI 추론 → 과실비율 즉시 산정</p>
       </div>
 
       {running&&<AgentPipeline stepStates={stepStates}/>}
@@ -2087,7 +2087,7 @@ function App(){
             <input placeholder="예: 현대 아이오닉 5 (2023)" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
           <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차량 번호</div>
             <input placeholder="예: 12가 3456" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
-          <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차대번호 (VIN) <span style={{fontSize:8,color:C.t3}}>(선택)</span></div>
+          <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차대번호 (VIN) <span style={{fontSize:8,color:C.t3}}>(입력)</span></div>
             <input placeholder="영문/숫자 혼합 17자리" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none",fontFamily:"var(--mono)"}}/></div>
         </div>
         <div style={{marginBottom:10}}>
