@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -1518,7 +1518,7 @@ function App(){
       faultA:primaryFaultA,faultB:primaryFaultB,
       labelA:primaryDiagram.la||(isPed?"차량":"A"),labelB:primaryDiagram.lb||(isPed?"보행자":"B"),
       mods,appliedMods:(primaryDiagram.mods||[]).map(mod=>({...mod,applied:mods.some(dm=>mod.n.includes(dm)||dm.includes(mod.n))})),
-      laws:getLaws(primaryDiagram,combined),similar:allSimilar,dbPrecedents:dbResults,text:combined,
+      laws:getLaws(primaryDiagram,combined),similar:allSimilar,dbPrecedents:dbResults,kbStats:kbStats,text:combined,
       primarySource,claudeResult,engineMatch:m,engineFault:{a:engineFaultA,b:engineFaultB},
       diagramMatch:primarySource==='claude'&&m?(primaryDiagram.id===m.match.id?"일치":"불일치"):"N/A"
     };
@@ -2169,3 +2169,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
+
+
