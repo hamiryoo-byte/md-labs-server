@@ -1486,6 +1486,12 @@ function App(){
     // ═══ Step 8: 판례 검색 ═══
     setStep("similar","running",30,"유사 판례 검색...");
     await new Promise(r=>setTimeout(r,200));
+        // 지식베이스 통계 조회
+    let kbStats={};
+    try{
+      const kbRes=await fetch('/api/knowledge?type=similar&accident_place='+(primaryDiagram?.id||'')+'&accident_type='+encodeURIComponent(accType));
+      if(kbRes.ok){const kbData=await kbRes.json();kbStats={similar:kbData.data||[],count:kbData.data?.length||0};}
+    }catch(e){console.warn('KB stats error:',e)}
     const sim=findSimilar(combined,kb);
     const allSimilar=[...sim,...dbResults.filter(d=>!sim.some(s=>s.id===d.id))].sort((a,b)=>(b.matchScore||0)-(a.matchScore||0)).slice(0,10);
     setStep("similar","done",100,allSimilar.length?`${allSimilar.length}건`:"없음");
@@ -2169,5 +2175,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
+
 
 
