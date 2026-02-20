@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       
       const stats = {};
       data.forEach(r => {
-        const key = ${r.accident_place}_;
+        const key = `${r.accident_place}_${r.accident_type}`;
         if (!stats[key]) stats[key] = { count: 0, avg_a: 0, avg_b: 0 };
         stats[key].count++;
         stats[key].avg_a += r.rate_a;
@@ -65,3 +65,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
