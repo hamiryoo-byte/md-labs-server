@@ -1,38 +1,58 @@
-const { supabase } = require('../lib/supabase');
+﻿import { createClient } from '@supabase/supabase-js';
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   try {
-    const { analysis_id, is_correct, correct_diagram, correct_fault_a, correct_fault_b, comment, expert_level } = req.body;
+    const { session_id, accident_type, knia_diagram, predicted_fault_a, predicted_fault_b, actual_fault_a, actual_fault_b, user_comment, modifiers_applied } = req.body;
 
-    if (!analysis_id) {
-      return res.status(400).json({ error: 'analysis_id 필수' });
+    const is_correct = actual_fault_a !== undefined
+      ? Math.abs(predicted_fault_a - actual_fault_a) <= 10
+      : null;
+
+    // 피드백 저장
+    await sb.from('analysis_feedback').insert({
+      session_id, accident_type, knia_diagram,
+      predicted_fault_a, predicted_fault_b,
+      actual_fault_a, actual_fault_b,
+      is_correct, user_comment,
+      modifiers_applied: modifiers_applied || []
+    });
+
+    // diagram_accuracy 업데이트
+    if (knia_diagram && is_correct !== null) {
+      const { data: existing } = await sb
+        .from('diagram_accuracy')
+        .select('*')
+        .eq('knia_diagram', knia_diagram)
+        .single();
+
+      if (existing) {
+        const total = existing.total_count + 1;
+        const correct = existing.correct_count + (is_correct ? 1 : 0);
+        await sb.from('diagram_accuracy').update({
+          total_count: total,
+          correct_count: correct,
+          accuracy_rate: Math.round((correct / total) * 100 * 100) / 100,
+          updated_at: new Date().toISOString()
+        }).eq('knia_diagram', knia_diagram);
+      } else {
+        await sb.from('diagram_accuracy').insert({
+          knia_diagram,
+          total_count: 1,
+          correct_count: is_correct ? 1 : 0,
+          accuracy_rate: is_correct ? 100 : 0
+        });
+      }
     }
 
-    const { data, error } = await supabase
-      .from('feedback')
-      .insert({
-        analysis_id,
-        is_correct:      is_correct !== undefined ? !!is_correct : null,
-        correct_diagram: correct_diagram || null,
-        correct_fault_a: correct_fault_a || null,
-        correct_fault_b: correct_fault_b || null,
-        comment:         (comment || '').slice(0, 2000),
-        expert_level:    expert_level || 'user',
-      })
-      .select('id')
-      .single();
-
-    if (error) throw error;
-
-    // 통계 업데이트는 DB 트리거가 자동 처리
-
-    return res.status(201).json({ success: true, id: data.id });
-
+    return res.status(200).json({ success: true, is_correct });
   } catch (err) {
-    console.error('Feedback API error:', err);
-    return res.status(500).json({ error: '피드백 저장 실패' });
+    return res.status(500).json({ error: err.message });
   }
-};
+}
