@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
-<title>MD Labs ATLAS Pro — AI Traffic Legal Analysis System</title>
+<title>MD Labs FARO Lite — Fault Analysis & Rating Oracle</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚖️</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -109,14 +109,14 @@ const LAWS_DB=[
   {id:"L18",article:"도로교통법 제63조",desc:"고속도로 합류·진출 방법",triggers:["합류","진입","가속차로"]},
 ];
 
-/* ── 1-C. KNIA 과실비율 인정기준 도표 DB ──
+/* ── 1-C. KNIA 과실 평가 인정기준 도표 DB ──
    v6.3 대비 변경: patterns[] 배열로 매칭 규칙을 데이터화
    → matchDiagram()에서 if문 하드코딩 완전 제거
    patterns: [{words:[필수키워드], weight:가중치, require:'all'|'any'}]
 */
 /*═══════════════════════════════════════════════════════════════════
-  MD Labs — 과실비율 도표 DB v2.0 (KNIA 기준 확장)
-  손해보험협회 「자동차사고 과실비율 인정기준 2023.06」 기반
+  MD Labs — 과실 평가 도표 DB v2.0 (KNIA 기준 확장)
+  손해보험협회 「자동차사고 과실 평가 인정기준 2023.06」 기반
   총 200개 도표: 차대차 140 + 차대사람 35 + 차대자전거/이륜차 25
 ═══════════════════════════════════════════════════════════════════*/
 const DB=[
@@ -863,7 +863,7 @@ const DB=[
 
 /* ╔══════════════════════════════════════════════════════════════╗
    ║  LAYER 2 — ENGINE (데이터 기반 분석 엔진)                    ║
-   ║  매칭 · 수정요소 감지 · 과실비율 산정 · 법규 추출            ║
+   ║  매칭 · 수정요소 감지 · 과실 평가 산정 · 법규 추출            ║
    ╚══════════════════════════════════════════════════════════════╝ */
 
 /* ── 2-A. 도표 매칭 (패턴 기반 — if문 없음) ── */
@@ -910,7 +910,7 @@ function detectMods(text){
   return MODS_DB.filter(m=>m.keywords.some(k=>t.includes(k))).map(m=>m.name);
 }
 
-/* ── 2-C. 과실비율 산정 ── */
+/* ── 2-C. 과실 평가 산정 ── */
 function calcFault(d,mods){
   let fA,fB;const isPed=d.bf.p!==undefined;
   if(isPed){fA=100-d.bf.p;fB=d.bf.p}else{fA=d.bf.a;fB=d.bf.b}
@@ -947,18 +947,18 @@ function generateAnalysis(r,input){
   const lines=[];
 
   // 사고 유형 분석
-  lines.push(`본 건은 ${d.cat} 사고 중 "${d.sub}" 유형에 해당하며, 손해보험협회 과실비율 인정기준 도표 ${d.id}(${d.t})이 적용됩니다.`);
+  lines.push(`본 건은 ${d.cat} 사고 중 "${d.sub}" 유형에 해당하며, 손해보험협회 과실 평가 인정기준 도표 ${d.id}(${d.t})이 적용됩니다.`);
 
   // 과실 근거
   if(isPed){
-    lines.push(`기본 과실비율은 차량측 ${100-d.bf.p}% : 보행자 ${d.bf.p}%입니다.`);
+    lines.push(`기본 과실 평가은 차량측 ${100-d.bf.p}% : 보행자 ${d.bf.p}%입니다.`);
     if(d.bf.p===0)lines.push(`보행자가 정당한 통행권을 가진 상황으로, 차량측에 전적인 과실이 인정됩니다.`);
     else lines.push(`보행자에게도 ${d.bf.p}%의 기본 과실이 인정되는 것은 보행자의 안전주의 의무에 기인합니다.`);
   }else if(isBike){
-    lines.push(`기본 과실비율은 자동차 ${d.bf.a}% : 자전거 ${d.bf.b}%입니다.`);
+    lines.push(`기본 과실 평가은 자동차 ${d.bf.a}% : 자전거 ${d.bf.b}%입니다.`);
     lines.push(`자동차는 자전거 대비 교통약자에 해당하는 자전거에 대한 주의의무가 가중됩니다.`);
   }else{
-    lines.push(`기본 과실비율은 ${r.labelA} ${d.bf.a}% : ${r.labelB} ${d.bf.b}%입니다.`);
+    lines.push(`기본 과실 평가은 ${r.labelA} ${d.bf.a}% : ${r.labelB} ${d.bf.b}%입니다.`);
     if(d.bf.b>=90)lines.push(`${r.labelB}측의 과실이 압도적으로 높은 것은 중대한 교통법규 위반에 기인합니다.`);
     else if(Math.abs(d.bf.a-d.bf.b)<=20)lines.push(`쌍방 과실이 비교적 균형적인 것은 양측 모두 주의의무가 있는 상황입니다.`);
   }
@@ -970,9 +970,9 @@ function generateAnalysis(r,input){
       const mdb=MODS_DB.find(x=>x.name===m);
       if(mdb)lines.push(`- ${m}: ${mdb.desc} (일반적 조정폭 ${mdb.adj>0?'+':''}${mdb.adj}%)`);
     });
-    lines.push(`수정요소를 반영한 최종 과실비율은 ${r.labelA} ${r.faultA}% : ${r.labelB} ${r.faultB}%로 산정됩니다.`);
+    lines.push(`수정요소를 반영한 최종 과실 평가은 ${r.labelA} ${r.faultA}% : ${r.labelB} ${r.faultB}%로 산정됩니다.`);
   }else{
-    lines.push(`별도의 수정요소가 감지되지 않아 기본 과실비율이 최종 비율로 적용됩니다.`);
+    lines.push(`별도의 수정요소가 감지되지 않아 기본 과실 평가이 최종 비율로 적용됩니다.`);
   }
 
   return lines.join('\n');
@@ -1099,12 +1099,12 @@ function analyzeEnv(du){return new Promise(ok=>{
   img.onerror=()=>ok({brightness:128,isNight:false,label:"오류",red:false,green:false,yellow:false,redCount:0,greenCount:0,yellowCount:0});img.src=du;
 })}
 
-/* ── GPU Server (ATLAS Pro) ── */
-const GPU_MODES={local:'http://localhost:8090',cloud:localStorage.getItem('atlas_gpu_cloud_url')||'',ngrok:localStorage.getItem('atlas_gpu_ngrok_url')||''};
-const GPU_MODE=localStorage.getItem('atlas_gpu_mode')||'local';
+/* ── GPU Server (FARO Lite) ── */
+const GPU_MODES={local:'http://localhost:8090',cloud:localStorage.getItem('FARO_gpu_cloud_url')||'',ngrok:localStorage.getItem('FARO_gpu_ngrok_url')||''};
+const GPU_MODE=localStorage.getItem('FARO_gpu_mode')||'local';
 const GPU_SERVER_URL=(GPU_MODE==='cloud'?GPU_MODES.cloud:GPU_MODE==='ngrok'?GPU_MODES.ngrok:GPU_MODES.local)||'http://localhost:8090';
 
-/* ── Supabase 판례 검색 (ATLAS Pro) ── */
+/* ── Supabase 판례 검색 (FARO Lite) ── */
 async function searchPrecedentsDB(text,accidentType,max=5){
   try{
     const kw=[];
@@ -1175,10 +1175,10 @@ const STEPS=[
   {id:"scan",icon:"📄",label:"자료분석",desc:"PDF·이미지 텍스트 추출"},
   {id:"video",icon:"🎬",label:"영상 환경분석",desc:"주야간·신호 추출"},
   {id:"gpu",icon:"🖥️",label:"GPU 객체탐지",desc:"차량·보행자·신호 AI 탐지"},
-  {id:"claude",icon:"🤖",label:"ATLAS AI 추론",desc:"1차 분석 · 도표매칭 · 과실산정"},
+  {id:"claude",icon:"🤖",label:"FARO AI 추론",desc:"1차 분석 · 도표매칭 · 과실산정"},
   {id:"match",icon:"📋",label:"엔진 비교분석",desc:"패턴매칭 검증 · 학습데이터 축적"},
   {id:"similar",icon:"🧠",label:"판례 검색",desc:"유사 판례 비교"},
-  {id:"result",icon:"⚖️",label:"결과 산출",desc:"과실비율+법적근거"},
+  {id:"result",icon:"⚖️",label:"결과 산출",desc:"과실 평가+법적근거"},
 ];
 
 function AgentPipeline({stepStates}){
@@ -1187,7 +1187,7 @@ function AgentPipeline({stepStates}){
   return<div style={{background:"rgba(8,12,24,.6)",border:"1px solid rgba(99,102,241,.1)",borderRadius:12,padding:"10px 14px",marginBottom:14}}>
     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
       {isRunning?<div style={{width:14,height:14,border:"2px solid #6366f140",borderTopColor:"#6366f1",borderRadius:7,animation:"spin .7s linear infinite",flexShrink:0}}/>:<div style={{width:6,height:6,borderRadius:3,background:"#1e293b",flexShrink:0}}/>}
-      <span style={{fontSize:12,fontWeight:800,color:isRunning?"#c7d2fe":"#94a3b8",letterSpacing:.5}}>ATLAS AGENT</span>
+      <span style={{fontSize:12,fontWeight:800,color:isRunning?"#c7d2fe":"#94a3b8",letterSpacing:.5}}>FARO AGENT</span>
       {activeStep&&<span style={{fontSize:11,color:"#a5b4fc",fontWeight:700}}>{activeStep.label}</span>}
       <span style={{fontSize:9,color:"#475569",marginLeft:"auto"}}>v8.5</span>
     </div>
@@ -1255,14 +1255,14 @@ async function callClaudeAPI(text,diagramList){
     const res=await fetch(API_BASE+'/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,diagramList,mode:'match',sessionId:SESSION_ID})});
     if(!res.ok)return null;
     return await res.json();
-  }catch(e){console.warn('ATLAS API 호출 실패:',e);return null}
+  }catch(e){console.warn('FARO API 호출 실패:',e);return null}
 }
 async function callClaudeReport(analysisData){
   try{
     const res=await fetch(API_BASE+'/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:analysisData.input_text||'분석',mode:'report',analysisData,sessionId:SESSION_ID})});
     if(!res.ok)return null;
     return await res.json();
-  }catch(e){console.warn('ATLAS AI 감정서 생성 실패:',e);return null}
+  }catch(e){console.warn('FARO AI 감정서 생성 실패:',e);return null}
 }
 
 function App(){
@@ -1275,7 +1275,7 @@ function App(){
   const[vidEnv,setVidEnv]=useState(null);
   const[vidFrames,setVidFrames]=useState([]);
   const vidRef=useRef(null);
-  useEffect(()=>{checkGPUServer().then(ok=>{setGpuAvail(ok);if(ok)console.log('🖥️ ATLAS Pro GPU 서버 연결됨')})},[]);
+  useEffect(()=>{checkGPUServer().then(ok=>{setGpuAvail(ok);if(ok)console.log('🖥️ FARO Lite GPU 서버 연결됨')})},[]);
   const[result,setResult]=useState(null);
   const[running,setRunning]=useState(false);
   const[page,setPage]=useState("input");
@@ -1408,7 +1408,7 @@ function App(){
       await new Promise(r=>setTimeout(r,200));
     }else{setStep("video","skip",null,"영상 없음")}
 
-    // Step 4.5: GPU Object Detection (ATLAS Pro)
+    // Step 4.5: GPU Object Detection (FARO Lite)
     if(hasVideo&&gpuAvail){
       setStep("gpu","running",10,"GPU 서버 연결...");
       try{
@@ -1451,22 +1451,22 @@ function App(){
       await new Promise(r=>setTimeout(r,200));
     }else{setStep("gpu","skip",null,gpuAvail===false?"GPU 서버 미연결":"영상/이미지 없음")}
 
-    // ═══ Step 6: ATLAS AI 1차 추론 (PRIMARY) ═══
+    // ═══ Step 6: FARO AI 1차 추론 (PRIMARY) ═══
     if(combined.length<5){setStep("claude","error",null,"텍스트 부족");setRunning(false);return}
-    setStep("claude","running",10,"ATLAS AI 분석 요청 중...");
+    setStep("claude","running",10,"FARO AI 분석 요청 중...");
     const diagramListStr=DB.map(d=>{const bf=d.bf;const fa=bf.a??bf.c??0;const fb=bf.b??bf.p??0;return`${d.id}: ${d.t} [A${fa}:B${fb}] (${d.cat}/${d.sub})`}).join('\n');
     let claudeInput=combined;
     if(gpuResult?.for_claude)claudeInput+="\n\n"+gpuResult.for_claude;
     const accType=combined.includes('보행자')||combined.includes('사람')?'차대사람':combined.includes('자전거')||combined.includes('이륜')?'차대자전거':'차대차';
     const dbResults=await searchPrecedentsDB(combined,accType,10);
     if(dbResults.length>0)claudeInput+="\n\n## 유사 판례 DB 검색 결과\n"+dbResults.slice(0,5).map(d=>`- ${d.case_number||''} (${d.court||''}) 과실${d.fault_ratio||'?'} ${d.categories||''} ${(d.summary||'').slice(0,100)}`).join('\n');
-    setStep("claude","running",30,"ATLAS AI 추론 중...");
+    setStep("claude","running",30,"FARO AI 추론 중...");
     let claudeResult=null;
     try{
       const cr=await callClaudeAPI(claudeInput,diagramListStr);
       if(cr?.success&&cr.result){const _d=DB.find(d=>d.id===String(cr.result.diagram_id));if(_d){const _ba=_d.bf.a??_d.bf.c??0,_bb=_d.bf.b??_d.bf.p??0;if(Math.abs(cr.result.fault_a-_bb)+Math.abs(cr.result.fault_b-_ba)<Math.abs(cr.result.fault_a-_ba)+Math.abs(cr.result.fault_b-_bb)){const _t=cr.result.fault_a;cr.result.fault_a=cr.result.fault_b;cr.result.fault_b=_t;if(cr.result.label_a&&cr.result.label_b){const _l=cr.result.label_a;cr.result.label_a=cr.result.label_b;cr.result.label_b=_l}}}claudeResult=cr.result;claudeResult._tokens=cr.tokens||0;
         setStep("claude","done",100,`도표 ${cr.result.diagram_id||'?'} · 과실 ${cr.result.fault_a??'?'}:${cr.result.fault_b??'?'}`);
-      }else{setStep("claude","done",100,"ATLAS AI 실패 → 엔진 폴백")}
+      }else{setStep("claude","done",100,"FARO AI 실패 → 엔진 폴백")}
     }catch(e){setStep("claude","error",null,"AI API 오류 → 엔진 폴백")}
     await new Promise(r=>setTimeout(r,200));
 
@@ -1498,7 +1498,7 @@ function App(){
     await new Promise(r=>setTimeout(r,150));
 
     // ═══ Step 9: 결과 산출 ═══
-    setStep("result","running",60,"과실비율 종합 산출...");
+    setStep("result","running",60,"과실 평가 종합 산출...");
     await new Promise(r=>setTimeout(r,400));
     const mods=detectMods(combined);
     let engineFaultA=50,engineFaultB=50,engineDiagram=null;
@@ -1620,9 +1620,9 @@ function App(){
 
           {/* HEADER */}
           <div style={TS.hdr}>
-            <div style={{fontSize:11,color:"#3b5998",fontWeight:700,letterSpacing:3,marginBottom:4}}>MD LABS AI ANALYSIS · ATLAS Pro</div>
-            <div style={{fontSize:"clamp(22px,4vw,28px)",fontWeight:900,letterSpacing:2}}>교통사고 과실비율 AI 감정서</div>
-            <div style={{fontSize:12,color:"#666",marginTop:6}}>손해보험협회 과실비율 인정기준 기반 AI 분석 보고서</div>
+            <div style={{fontSize:11,color:"#3b5998",fontWeight:700,letterSpacing:3,marginBottom:4}}>MD LABS AI ANALYSIS · FARO Lite</div>
+            <div style={{fontSize:"clamp(22px,4vw,28px)",fontWeight:900,letterSpacing:2}}>교통사고 과실 평가 AI 감정서</div>
+            <div style={{fontSize:12,color:"#666",marginTop:6}}>손해보험협회 과실 평가 인정기준 기반 AI 분석 보고서</div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:"#888",marginTop:14,padding:"0 10px"}}>
               <span>문서번호: <b style={{color:"#333"}}>{reportId}</b></span>
               <span>분석일시: <b style={{color:"#333"}}>{fmtDate} {fmtTime}</b></span>
@@ -1668,7 +1668,7 @@ function App(){
               </table>
             </div>}
             {gpuResult&&gpuResult.success&&<div style={{marginBottom:10}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#e74c3c",marginBottom:4}}>🖥️ GPU 객체 탐지 (ATLAS Pro)</div>
+              <div style={{fontSize:11,fontWeight:700,color:"#e74c3c",marginBottom:4}}>🖥️ GPU 객체 탐지 (FARO Lite)</div>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                 <tbody>
                   <tr><th style={{...TS.th,width:"30%"}}>모델</th><td style={TS.td}>{gpuResult.model} ({gpuResult.device})</td></tr>
@@ -1685,9 +1685,9 @@ function App(){
             {!pdfText&&!ocrResult?.text&&!vidEnv&&!gpuResult&&<div style={{fontSize:11,color:"#999",fontStyle:"italic"}}>첨부 증거자료 없음 — 텍스트 입력 기반 분석</div>}
           </div></div>
 
-          {/* 3. 과실비율 */}
-          <div style={TS.sec}><div style={TS.st}>제3장 과실비율 산정 결과</div><div style={TS.sb}>
-            <div style={{fontSize:11.5,lineHeight:2,marginBottom:12,color:"#333",whiteSpace:"pre-line"}}>{r.analysis||`도표 ${d.id}(${d.t})을 적용하여 과실비율을 산정합니다.`}</div>
+          {/* 3. 과실 평가 */}
+          <div style={TS.sec}><div style={TS.st}>제3장 과실 평가 산정 결과</div><div style={TS.sb}>
+            <div style={{fontSize:11.5,lineHeight:2,marginBottom:12,color:"#333",whiteSpace:"pre-line"}}>{r.analysis||`도표 ${d.id}(${d.t})을 적용하여 과실 평가을 산정합니다.`}</div>
             <div style={{display:"flex",height:36,borderRadius:18,overflow:"hidden",border:"2px solid #ddd",margin:"14px 0"}}>
               <div className="fault-bar-a" style={{width:`${r.faultA}%`,minWidth:r.faultA>0?40:0,background:"linear-gradient(135deg,#2c5aa0,#3b82f6)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14}}>{r.faultA>8?`${r.faultA}%`:""}</div>
               <div className="fault-bar-b" style={{width:`${r.faultB}%`,minWidth:r.faultB>0?40:0,background:"linear-gradient(135deg,#c0392b,#e74c3c)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:14}}>{r.faultB>8?`${r.faultB}%`:""}</div>
@@ -1700,14 +1700,14 @@ function App(){
                 </div>)}
             </div>
             <div style={{textAlign:"center",fontSize:13,fontWeight:800,color:"#1a1a2e",margin:"10px 0",padding:8,background:"#f0f4ff",borderRadius:6}}>
-              과실비율 = {r.labelA} <span style={{color:"#2c5aa0"}}>{r.faultA}%</span> : {r.labelB} <span style={{color:"#c0392b"}}>{r.faultB}%</span>
+              과실 평가 = {r.labelA} <span style={{color:"#2c5aa0"}}>{r.faultA}%</span> : {r.labelB} <span style={{color:"#c0392b"}}>{r.faultB}%</span>
             </div>
           </div></div>
 
           {/* 4. 수정요소 */}
           <div style={TS.sec}><div style={TS.st}>제4장 수정요소 검토</div><div style={TS.sb}>
             <div style={{fontSize:11,lineHeight:2,marginBottom:8,color:"#555"}}>
-              기본 과실비율({d.bf.p!==undefined?`보행자 ${d.bf.p}%`:`A ${d.bf.a||0} : B ${d.bf.b||0}`})에 대하여 {MODS_DB.length}개 수정요소를 검토하였습니다.
+              기본 과실 평가({d.bf.p!==undefined?`보행자 ${d.bf.p}%`:`A ${d.bf.a||0} : B ${d.bf.b||0}`})에 대하여 {MODS_DB.length}개 수정요소를 검토하였습니다.
             </div>
             {r.appliedMods?.length>0?<table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
               <thead><tr><th style={TS.th}>수정요소</th><th style={{...TS.th,width:"15%"}}>조정</th><th style={{...TS.th,width:"15%"}}>대상</th><th style={{...TS.th,width:"15%"}}>적용</th></tr></thead>
@@ -1745,15 +1745,15 @@ function App(){
           {r.similar?.length>0&&<div style={TS.sec}><div style={TS.st}>제7장 유사 판례 분석 {r.dbPrecedents?.length>0&&`(DB ${r.dbPrecedents.length}건 포함)`}</div><div style={TS.sb}>
             {r.similar.map(c=><div key={c.id} style={{padding:8,border:"1px solid #e8e8f0",borderRadius:6,marginBottom:6,background:c.source==='supabase'?"#f0fff0":"#fafafa"}}>
               <div style={{fontSize:11,fontWeight:700}}>{c.source==='supabase'?'📗':'📘'} {c.case_name||c.accidentType||''} — {c.case_number||c.caseNumber||"판례번호 미상"}</div>
-              <div style={{fontSize:10.5,color:"#666"}}>과실비율: {c.fault_a||c.faultA||'?'}% : {c.fault_b||c.faultB||'?'}% {(c.court)||''} {c.date?`| ${c.date}`:''}</div>
+              <div style={{fontSize:10.5,color:"#666"}}>과실 평가: {c.fault_a||c.faultA||'?'}% : {c.fault_b||c.faultB||'?'}% {(c.court)||''} {c.date?`| ${c.date}`:''}</div>
               {c.summary&&<div style={{fontSize:10,color:"#555",marginTop:3,lineHeight:1.6}}>{c.summary.slice(0,200)}</div>}
             </div>)}
           </div></div>}
 
-          {/* 8. ATLAS AI 분석 */}
-          {llmResult&&!llmResult.error&&<div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#6366f1"}}>제8장 ATLAS AI 분석</div><div style={TS.sb}>
+          {/* 8. FARO AI 분석 */}
+          {llmResult&&!llmResult.error&&<div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#6366f1"}}>제8장 FARO AI 분석</div><div style={TS.sb}>
             <div style={{background:"#f0f0ff",border:"1px solid #d0d0f0",borderRadius:8,padding:12,marginBottom:10}}>
-              <div style={{fontSize:10,color:"#6366f1",fontWeight:700,marginBottom:6}}>🤖 AI 분석 엔진: ATLAS AI (MD Labs)</div>
+              <div style={{fontSize:10,color:"#6366f1",fontWeight:700,marginBottom:6}}>🤖 AI 분석 엔진: FARO AI (MD Labs)</div>
               {llmResult.reasoning&&<p style={{fontSize:10.5,color:"#444",lineHeight:1.9,marginBottom:8}}>
                 <b>AI 추론 과정:</b> {llmResult.reasoning}</p>}
               {llmResult.analysis&&<p style={{fontSize:10.5,color:"#444",lineHeight:1.9,marginBottom:8}}>
@@ -1762,14 +1762,14 @@ function App(){
                 <thead><tr>
                   <th style={{...TS.th,background:"#e8e8f8",width:"25%"}}>항목</th>
                   <th style={{...TS.th,background:"#e8f0e8",width:"37%"}}>패턴매칭 엔진</th>
-                  <th style={{...TS.th,background:"#e8e8f8",width:"38%"}}>ATLAS AI</th>
+                  <th style={{...TS.th,background:"#e8e8f8",width:"38%"}}>FARO AI</th>
                 </tr></thead>
                 <tbody>
                   <tr><td style={{...TS.td,fontWeight:700}}>추천 도표</td>
                     <td style={{...TS.td,textAlign:"center"}}>{d.id}</td>
                     <td style={{...TS.td,textAlign:"center",color:d.id===llmResult.diagram_id?"#27ae60":"#e67e22",fontWeight:700}}>
                       {llmResult.diagram_id||"-"} {d.id===llmResult.diagram_id?"✅ 일치":"⚠️ 상이"}</td></tr>
-                  <tr><td style={{...TS.td,fontWeight:700}}>과실비율</td>
+                  <tr><td style={{...TS.td,fontWeight:700}}>과실 평가</td>
                     <td style={{...TS.td,textAlign:"center"}}>{r.faultA}% : {r.faultB}%</td>
                     <td style={{...TS.td,textAlign:"center"}}>{llmResult.fault_a!==undefined?`${llmResult.fault_a}% : ${llmResult.fault_b}%`:"-"}</td></tr>
                   <tr><td style={{...TS.td,fontWeight:700}}>신뢰도</td>
@@ -1781,43 +1781,43 @@ function App(){
               </table>
             </div>
             {d.id!==llmResult.diagram_id&&llmResult.diagram_id&&<div style={{padding:8,background:"#fff8e1",border:"1px solid #ffe082",borderRadius:6,fontSize:10.5,lineHeight:1.7}}>
-              <b>⚠️ 도표 불일치 안내:</b> 패턴매칭 엔진(도표 {d.id})과 ATLAS AI(도표 {llmResult.diagram_id})의 추천이 다릅니다.
+              <b>⚠️ 도표 불일치 안내:</b> 패턴매칭 엔진(도표 {d.id})과 FARO AI(도표 {llmResult.diagram_id})의 추천이 다릅니다.
               사고 상황을 재검토하시거나, 전문가 확인을 권장합니다.
             </div>}
           </div></div>}
 
           {/* 9. 종합 의견 */}
           <div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#c0392b"}}>제{llmResult&&!llmResult.error?9:8}장 종합 의견</div><div style={{...TS.sb,fontSize:11.5,lineHeight:2.2,color:"#333"}}>
-            <p>본 건 교통사고에 대하여 손해보험협회 「자동차사고 과실비율 인정기준(2023.6)」을 적용하여 분석한 결과,
+            <p>본 건 교통사고에 대하여 손해보험협회 「자동차사고 과실 평가 인정기준(2023.6)」을 적용하여 분석한 결과,
             도표 <b>{d.id}</b>({d.t})이 가장 적합한 것으로 판단됩니다.</p>
-            <p style={{marginTop:8}}>기본 과실비율({d.bf.p!==undefined?`보행자 ${d.bf.p}%`:`A ${d.bf.a||0}% : B ${d.bf.b||0}%`})에
+            <p style={{marginTop:8}}>기본 과실 평가({d.bf.p!==undefined?`보행자 ${d.bf.p}%`:`A ${d.bf.a||0}% : B ${d.bf.b||0}%`})에
             {r.mods?.length>0?` 수정요소(${r.mods.join(', ')})를 반영하여`:' 수정요소 없이'}
-            {' '}최종 과실비율을 <b>{r.labelA} {r.faultA}% : {r.labelB} {r.faultB}%</b>로 산정합니다.</p>
+            {' '}최종 과실 평가을 <b>{r.labelA} {r.faultA}% : {r.labelB} {r.faultB}%</b>로 산정합니다.</p>
             {llmResult&&!llmResult.error&&<p style={{marginTop:8,padding:8,background:"#f0f8f0",border:"1px solid #c8e6c9",borderRadius:6}}>
-              <b>🤖 AI 종합 판단:</b> ATLAS AI 분석 결과,
+              <b>🤖 AI 종합 판단:</b> FARO AI 분석 결과,
               {d.id===llmResult.diagram_id
                 ?<> 도표 <b>{d.id}</b>이 적합하다는 점에서 <span style={{color:"#27ae60",fontWeight:700}}>패턴매칭 엔진과 일치</span>하여 분석 신뢰도가 높습니다.
                   {llmResult.fault_a!==undefined&&Math.abs(r.faultA-llmResult.fault_a)<=5
-                    ?' 과실비율도 유사하게 산정되었습니다.'
-                    :llmResult.fault_a!==undefined?` 다만 과실비율은 AI가 ${llmResult.fault_a}:${llmResult.fault_b}으로 산정하여 일부 차이가 있으므로 참고하시기 바랍니다.`
+                    ?' 과실 평가도 유사하게 산정되었습니다.'
+                    :llmResult.fault_a!==undefined?` 다만 과실 평가은 AI가 ${llmResult.fault_a}:${llmResult.fault_b}으로 산정하여 일부 차이가 있으므로 참고하시기 바랍니다.`
                     :''}</>
                 :<> 도표 <b>{llmResult.diagram_id}</b>을 추천하여 <span style={{color:"#e67e22",fontWeight:700}}>패턴매칭 결과(도표 {d.id})와 상이</span>합니다.
                   사고 정황의 재검토를 권장하며, 양쪽 분석 결과를 종합적으로 참고하시기 바랍니다.</>}
             </p>}
             {vidEnv&&<p style={{marginTop:8}}>영상 환경 분석 결과 사고 당시 <b>{vidEnv.timeOfDay}</b>(평균밝기 {vidEnv.avgBr})이며,
             {vidEnv.hasRed||vidEnv.hasGreen?" 신호등이 감지되어 신호교차로 사고로 판단됩니다.":" 신호등 감지가 명확하지 않아 추가 확인이 필요합니다."}</p>}
-            {gpuResult&&gpuResult.success&&<p style={{marginTop:8}}>GPU 객체 탐지(ATLAS Pro) 결과 <b>{gpuResult.summary.accident_type}</b> 사고로 추정되며,
+            {gpuResult&&gpuResult.success&&<p style={{marginTop:8}}>GPU 객체 탐지(FARO Lite) 결과 <b>{gpuResult.summary.accident_type}</b> 사고로 추정되며,
             차량 {gpuResult.summary.vehicle_count}대{gpuResult.summary.has_pedestrian?", 보행자":""}{gpuResult.summary.has_bicycle?", 자전거/PM":""}가 감지되었습니다.
             {gpuResult.summary.has_signal?` 신호등(${gpuResult.summary.signal_color})이 확인되었습니다.`:""}</p>}
             <p style={{marginTop:12,fontWeight:700,color:"#c0392b"}}>본 감정서는 AI 분석에 기반한 참고자료이며, 법적 구속력이 없습니다.
-            정확한 과실비율은 보험사 심의 또는 법원 판단을 통해 최종 확정됩니다.</p>
+            정확한 과실 평가은 보험사 심의 또는 법원 판단을 통해 최종 확정됩니다.</p>
           </div></div>
 
           {/* FOOTER */}
           <div style={{marginTop:30,padding:14,border:"1px solid #e0e0e0",borderRadius:6,background:"#fefefe",fontSize:10,color:"#888",textAlign:"center",lineHeight:1.8}}>
-            본 감정서는 손해보험협회 「자동차사고 과실비율 인정기준(2023년 6월)」을 기반으로 AI가 자동 생성한 참고 문서입니다.<br/>
-            법적 효력이 없으며, 실제 보상 및 소송에서의 과실비율은 관련 법률 및 판례에 따라 달리 적용될 수 있습니다.<br/>
-            정확한 과실비율 판단은 보험사, 손해사정인 또는 법률전문가에게 문의하시기 바랍니다.
+            본 감정서는 손해보험협회 「자동차사고 과실 평가 인정기준(2023년 6월)」을 기반으로 AI가 자동 생성한 참고 문서입니다.<br/>
+            법적 효력이 없으며, 실제 보상 및 소송에서의 과실 평가은 관련 법률 및 판례에 따라 달리 적용될 수 있습니다.<br/>
+            정확한 과실 평가 판단은 보험사, 손해사정인 또는 법률전문가에게 문의하시기 바랍니다.
           </div>
           <div style={{textAlign:"center",marginTop:20,paddingTop:16,borderTop:"2px solid #1a1a2e"}}>
             <div style={{fontSize:13,fontWeight:800,letterSpacing:1}}>MD Labs</div>
@@ -1949,13 +1949,13 @@ function App(){
             <p style={{fontSize:10,color:C.t3,marginTop:6}}>전문 감정서 형식으로 출력 · 인쇄/PDF 저장 가능</p>
           </div>
 
-          {/* v8.5 ATLAS AI + 엔진 비교 + 학습레이블 */}
+          {/* v8.5 FARO AI + 엔진 비교 + 학습레이블 */}
           {r.primarySource&&<div style={{background:r.primarySource==='claude'?"rgba(99,102,241,.04)":"rgba(59,130,246,.04)",border:`1px solid ${r.primarySource==='claude'?C.violet:C.blue}15`,borderRadius:14,padding:14,marginBottom:10}}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
               <span style={{fontSize:16}}>{r.primarySource==='claude'?'🤖':'📋'}</span>
               <div>
                 <div style={{fontSize:12,fontWeight:800,color:r.primarySource==='claude'?C.violet:C.blue}}>
-                  {r.primarySource==='claude'?'ATLAS AI 1차 추론 결과':'엔진 결과 (ATLAS AI 폴백)'}
+                  {r.primarySource==='claude'?'FARO AI 1차 추론 결과':'엔진 결과 (FARO AI 폴백)'}
                 </div>
               </div>
             </div>
@@ -1970,11 +1970,11 @@ function App(){
               </div>}
             </div>}
             {r.engineMatch&&<div style={{background:"rgba(6,9,16,.4)",borderRadius:10,padding:10,border:`1px solid ${C.b1}`}}>
-              <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:8}}>📊 엔진 vs ATLAS AI</div>
+              <div style={{fontSize:10,fontWeight:700,color:C.t3,marginBottom:8}}>📊 엔진 vs FARO AI</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,fontSize:10}}>
                 <div style={{fontWeight:700,color:C.t3,padding:"4px 6px"}}>항목</div>
                 <div style={{fontWeight:700,color:C.blue,padding:"4px 6px",textAlign:"center"}}>📋 엔진</div>
-                <div style={{fontWeight:700,color:C.violet,padding:"4px 6px",textAlign:"center"}}>🤖 ATLAS</div>
+                <div style={{fontWeight:700,color:C.violet,padding:"4px 6px",textAlign:"center"}}>🤖 FARO</div>
                 <div style={{color:C.t2,padding:"4px 6px",borderTop:`1px solid ${C.b1}`}}>도표</div>
                 <div style={{color:C.t2,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`}}>{r.engineMatch.match.id}</div>
                 <div style={{color:r.claudeResult?.diagram_id===r.engineMatch.match.id?C.emerald:C.amber,fontWeight:700,padding:"4px 6px",textAlign:"center",borderTop:`1px solid ${C.b1}`}}>
@@ -2034,7 +2034,7 @@ function App(){
   return<div style={{minHeight:"100vh",background:C.bg,color:C.t1,fontFamily:"var(--sans)"}}>
     <div style={{padding:"10px 16px",background:"rgba(6,9,16,.9)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,zIndex:50}}>
       <div style={{...mx,display:"flex",alignItems:"center",gap:8,padding:0}}>
-        <div style={{flex:1}}><div style={{fontWeight:900,fontSize:15,letterSpacing:-.3}}>MD Labs <span style={{fontWeight:700,fontSize:12,color:C.blue}}>ATLAS Pro</span></div><div style={{fontSize:9,color:C.t2,letterSpacing:.8,fontWeight:500}}>AI Traffic Legal Analysis System</div></div>
+        <div style={{flex:1}}><div style={{fontWeight:900,fontSize:15,letterSpacing:-.3}}>MD Labs <span style={{fontWeight:700,fontSize:12,color:C.blue}}>FARO Lite</span></div><div style={{fontSize:9,color:C.t2,letterSpacing:.8,fontWeight:500}}>Fault Analysis & Rating Oracle</div></div>
         <div style={{display:"flex",alignItems:"center",gap:4}}>
           <span style={{fontSize:8,color:C.t3,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.b1}`}}>{DB.length}도표 · 69K판례</span>
           <div style={{display:"flex",borderRadius:4,overflow:"hidden",border:`1px solid ${C.b1}`}}>
@@ -2044,15 +2044,15 @@ function App(){
         </div>
         {gpuAvail&&<span style={{fontSize:8,color:"#27ae60",padding:"2px 6px",borderRadius:4,background:"rgba(39,174,96,.1)",border:"1px solid rgba(39,174,96,.3)",marginLeft:4,cursor:"pointer"}} onClick={()=>{
           const m=prompt("GPU 모드 선택:\n\n1 = LOCAL (무료, PC 직접)\n2 = NGROK (무료, 외부 터널)\n3 = CLOUD (유료, 24시간)\n\n현재: "+gpuMode.toUpperCase()+"\nURL: "+GPU_SERVER_URL,"");
-          if(m==='1'){localStorage.setItem('atlas_gpu_mode','local');localStorage.removeItem('atlas_gpu_ngrok_url');localStorage.removeItem('atlas_gpu_cloud_url');location.reload()}
-          else if(m==='2'){const u=prompt("ngrok URL:",GPU_MODES.ngrok||"https://xxxxx.ngrok-free.dev");if(u){localStorage.setItem('atlas_gpu_mode','ngrok');localStorage.setItem('atlas_gpu_ngrok_url',u);location.reload()}}
-          else if(m==='3'){const u=prompt("Cloud GPU URL:",GPU_MODES.cloud||"https://your-cloud-gpu.com");if(u){localStorage.setItem('atlas_gpu_mode','cloud');localStorage.setItem('atlas_gpu_cloud_url',u);location.reload()}}
+          if(m==='1'){localStorage.setItem('FARO_gpu_mode','local');localStorage.removeItem('FARO_gpu_ngrok_url');localStorage.removeItem('FARO_gpu_cloud_url');location.reload()}
+          else if(m==='2'){const u=prompt("ngrok URL:",GPU_MODES.ngrok||"https://xxxxx.ngrok-free.dev");if(u){localStorage.setItem('FARO_gpu_mode','ngrok');localStorage.setItem('FARO_gpu_ngrok_url',u);location.reload()}}
+          else if(m==='3'){const u=prompt("Cloud GPU URL:",GPU_MODES.cloud||"https://your-cloud-gpu.com");if(u){localStorage.setItem('FARO_gpu_mode','cloud');localStorage.setItem('FARO_gpu_cloud_url',u);location.reload()}}
         }}>🖥️ GPU {gpuMode==='cloud'?'☁️유료':'🏠무료'} 연결됨</span>}
         {gpuAvail===false&&<span style={{fontSize:8,color:"#e74c3c",padding:"2px 6px",borderRadius:4,background:"rgba(231,76,60,.1)",border:"1px solid rgba(231,76,60,.2)",marginLeft:4,cursor:"pointer"}} onClick={()=>{
           const m=prompt("GPU 모드 선택:\n\n1 = LOCAL (무료, PC 직접)\n2 = NGROK (무료, 외부 터널)\n3 = CLOUD (유료, 24시간)\n\n현재: "+gpuMode.toUpperCase()+"\nURL: "+GPU_SERVER_URL,"");
-          if(m==='1'){localStorage.setItem('atlas_gpu_mode','local');location.reload()}
-          else if(m==='2'){const u=prompt("ngrok URL:",GPU_MODES.ngrok||"https://xxxxx.ngrok-free.dev");if(u){localStorage.setItem('atlas_gpu_mode','ngrok');localStorage.setItem('atlas_gpu_ngrok_url',u);location.reload()}}
-          else if(m==='3'){const u=prompt("Cloud GPU URL:",GPU_MODES.cloud||"https://your-cloud-gpu.com");if(u){localStorage.setItem('atlas_gpu_mode','cloud');localStorage.setItem('atlas_gpu_cloud_url',u);location.reload()}}
+          if(m==='1'){localStorage.setItem('FARO_gpu_mode','local');location.reload()}
+          else if(m==='2'){const u=prompt("ngrok URL:",GPU_MODES.ngrok||"https://xxxxx.ngrok-free.dev");if(u){localStorage.setItem('FARO_gpu_mode','ngrok');localStorage.setItem('FARO_gpu_ngrok_url',u);location.reload()}}
+          else if(m==='3'){const u=prompt("Cloud GPU URL:",GPU_MODES.cloud||"https://your-cloud-gpu.com");if(u){localStorage.setItem('FARO_gpu_mode','cloud');localStorage.setItem('FARO_gpu_cloud_url',u);location.reload()}}
         }}>GPU 미연결 ⚙️</span>}
         {stats.total>0&&<button onClick={()=>setShowKB(!showKB)} style={{padding:"4px 8px",borderRadius:7,border:`1px solid ${showKB?`${C.violet}30`:C.b1}`,background:showKB?`${C.violet}08`:"transparent",color:showKB?C.violet:C.t3,fontSize:10,fontWeight:600,cursor:"pointer"}}>🧠 {stats.total}</button>}
       </div>
@@ -2060,9 +2060,9 @@ function App(){
     <div style={{...mx,paddingTop:14,paddingBottom:80}}>
       <div style={{textAlign:"center",marginBottom:18}}>
         <h1 style={{fontSize:"clamp(20px,5vw,30px)",fontWeight:900,lineHeight:1.3,marginBottom:4}}>
-          교통사고 <span style={{background:`linear-gradient(135deg,${C.blue},${C.violet})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>과실비율</span> 분석 시스템
+          교통사고 과실{" "} <span style={{background:`linear-gradient(135deg,${C.blue},${C.violet})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>분석 · 평가 · 판단</span>{" "}AI
         </h1>
-        <p style={{fontSize:12,color:C.t2}}>ATLAS AI 추론 → 사고 상황 입력 → 과실비율 즉시 산정</p>
+        <p style={{fontSize:12,color:C.t2}}>사고 상황 입력 → FARO AI 추론 → 과실 평가 즉시 산정</p>
       </div>
 
       {running&&<AgentPipeline stepStates={stepStates}/>}
@@ -2084,14 +2084,14 @@ function App(){
         <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:12}}><span style={{fontSize:15}}>📝</span><span style={{fontSize:14,fontWeight:800}}>사고 내용 기록</span></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
           <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차종 및 연식</div>
-            <input placeholder="예: 현대 아이오닉 5 (2023)" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
+            <input placeholder="예: 현대 아이오닉 5 (2025)" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
           <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차량 번호</div>
             <input placeholder="예: 12가 3456" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none"}}/></div>
-          <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차대번호 (VIN) <span style={{fontSize:8,color:C.t3}}>(선택)</span></div>
+          <div><div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>차대번호 (VIN) <span style={{fontSize:8,color:C.t3}}>(입력)</span></div>
             <input placeholder="영문/숫자 혼합 17자리" style={{width:"100%",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:11,outline:"none",fontFamily:"var(--mono)"}}/></div>
         </div>
         <div style={{marginBottom:10}}>
-          <div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}>사고 내용 설명 <span style={{color:C.red}}>*</span></div>
+          <div style={{fontSize:10,fontWeight:600,color:C.t3,marginBottom:3}}> <span style={{color:C.red}}>*</span></div>
           <textarea ref={taRef} value={input} onChange={e=>setInput(e.target.value)}
             placeholder={"1) 사고 발생 시간:\n2) 사고 발생 장소:\n3) 보험 가입 여부:\n4) 경찰 신고 여부:\n5) 사고 내용 설명:\n\n예: 편도 2차로에서 1차로 직진 중 2차로 차량이 깜빡이 없이 차선변경하여 측면 충돌"}
             style={{width:"100%",padding:12,borderRadius:12,border:`1px solid ${C.b2}`,background:"rgba(6,9,16,.5)",color:C.t1,fontSize:12,outline:"none",resize:"vertical",minHeight:140,lineHeight:1.8,userSelect:"text",WebkitUserSelect:"text"}}/>
@@ -2152,7 +2152,7 @@ function App(){
           color:running?"#818cf8":agreed&&(input.trim()||files.length>0||vidSrc)?"#fff":"#475569",
           fontSize:15,fontWeight:800,cursor:running?"wait":"pointer",transition:"all .3s",marginBottom:18,
           animation:running?"pulse 1.5s infinite":"none"}}>
-        {running?"🤖 ATLAS AI 추론 중...":"⚖️ 과실비율 분석 시작"}
+        {running?"🤖 FARO AI 추론 중...":"⚖️ 과실 평가 분석 시작"}
       </button>
 
       <div style={{marginBottom:16}}>
