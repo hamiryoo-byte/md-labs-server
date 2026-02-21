@@ -1490,7 +1490,7 @@ function App(){
     let kbStats={};
     try{
       const kbRes=await fetch('/api/knowledge?type=violation');
-      if(kbRes.ok){const kbData=await kbRes.json();kbStats={similar:kbData.stats||[],count:kbData.total||0};}
+      if(kbRes.ok){const kbData=await kbRes.json();kbStats={similar:kbData.stats||[],count:kbData.total||0};console.log('KB loaded:',kbStats.count);}
     }catch(e){console.warn('KB stats error:',e)}
     const sim=findSimilar(combined,kb);
     const allSimilar=[...sim,...dbResults.filter(d=>!sim.some(s=>s.id===d.id))].sort((a,b)=>(b.matchScore||0)-(a.matchScore||0)).slice(0,10);
