@@ -1744,7 +1744,7 @@ function App(){
           {/* 7. 유사 판례 */}
           {<div style={TS.sec}><div style={{...TS.st,borderLeftColor:"#10b981"}}>제7장 지식베이스 통계 ({r.kbStats.count}건)</div><div style={TS.sb}>
             <div style={{background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.2)",borderRadius:8,padding:10,fontSize:11}}>
-              <div style={{fontWeight:700,color:"#10b981",marginBottom:6}}>📊 AI Hub 학습데이터 유사 사고 {r.kbStats.count}건</div>
+              <div style={{fontWeight:700,color:"#10b981",marginBottom:6}}>📊 학습데이터 유사 사고 {r.kbStats.count}건</div>
               {r.kbStats.similar?.slice(0,5).map((s,i)=><div key={i} style={{padding:"4px 0",borderBottom:"1px solid rgba(16,185,129,.1)"}}>
                 <span style={{color:"#10b981",fontWeight:700}}>{s.violation_type||s.accident_place||""}</span> {s.sub_type||s.accident_type||""} — <span style={{color:"#f59e0b"}}>{s.rate_a!==undefined?`A${s.rate_a}:B${s.rate_b}`:""}</span>
               </div>)}
