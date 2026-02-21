@@ -39,14 +39,10 @@ export default async function handler(req, res) {
     }
     // 5. 교통법규위반 통계 (신규)
     if (type === 'violation') {
-      const { data } = await sb.from('traffic_violation_data').select('violation_type, sub_type').order('violation_type').limit(5000);
-      const stats = {};
-      data.forEach(r => {
-        const key = `${r.violation_type}_${r.sub_type}`;
-        if (!stats[key]) stats[key] = { violation_type: r.violation_type, sub_type: r.sub_type, count: 0 };
-        stats[key].count++;
-      });
-      return res.status(200).json({ stats: Object.values(stats), total: data.length });
+      const { data } = await sb.rpc('get_violation_stats');
+      const stats = (data||[]).map(r=>({ violation_type: r.violation_type, sub_type: r.sub_type, count: Number(r.cnt) }));
+      const total = stats.reduce((a,b)=>a+b.count,0);
+      return res.status(200).json({ stats, total });
     }
     // 6. 이륜차 위험 시설물 (신규)
     if (type === 'motorcycle') {
@@ -86,6 +82,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
 
 
 
