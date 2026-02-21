@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     }
     // 5. 교통법규위반 통계 (신규)
     if (type === 'violation') {
-      const { data } = await sb.from('traffic_violation_data').select('violation_type, sub_type').limit(1000);
+      const { data } = await sb.from('traffic_violation_data').select('violation_type, sub_type').order('violation_type').limit(5000);
       const stats = {};
       data.forEach(r => {
         const key = `${r.violation_type}_${r.sub_type}`;
@@ -86,5 +86,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
 
 
