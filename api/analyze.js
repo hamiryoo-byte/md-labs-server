@@ -21,7 +21,6 @@ module.exports = async (req, res) => {
     if (!text || text.length < 5) {
       return res.status(400).json({ error: '텍스트가 너무 짧습니다 (5자 이상)' });
     }
-    // 입력 길이 제한
     if (text.length > 10000) {
       return res.status(400).json({ error: '텍스트가 너무 깁니다 (10,000자 이하)' });
     }
@@ -29,18 +28,15 @@ module.exports = async (req, res) => {
     let result, usage;
 
     if (mode === 'report') {
-      // 감정서 분석 텍스트 생성
       const report = await generateReport(analysisData);
       result = { analysis: report.text };
       usage = report.usage;
     } else {
-      // 도표 매칭 + 과실비율 분석
       const analysis = await analyzeAccident(text, diagramList || '');
       result = analysis.result;
       usage = analysis.usage;
     }
 
-    // LLM 사용량 기록
     if (usage) {
       await supabase.from('llm_usage').insert({
         model: usage.model,
@@ -49,7 +45,7 @@ module.exports = async (req, res) => {
         cost_usd: ((usage.input_tokens * 0.003 + usage.output_tokens * 0.015) / 1000),
         purpose: mode === 'report' ? 'report' : 'match',
         session_id: sessionId || null,
-      }).then(() => {}).catch(() => {}); // 실패해도 무시
+      }).then(() => {}).catch(() => {});
     }
 
     return res.status(200).json({
@@ -62,7 +58,7 @@ module.exports = async (req, res) => {
     console.error('Analyze API error:', err);
     return res.status(500).json({ 
       error: 'AI 분석 중 오류가 발생했습니다',
-      detail: process.env.NODE_ENV === 'development' ? err.message : undefined
+      detail: err.message   // ✅ 항상 오류 상세 반환 (디버깅용)
     });
   }
 };
